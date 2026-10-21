@@ -1,0 +1,20 @@
+import {getTranslations, getLocale} from 'next-intl/server';
+import {notFound} from 'next/navigation';
+import {requireAdmin} from '@/lib/auth';
+import {adminScan} from '@/lib/admin/data';
+import {AdminHeading, AdminSection, AdminEmpty, DateText} from '@/components/admin/primitives';
+import {AdminActionButton} from '@/components/admin/controls';
+import {Link} from '@/i18n/navigation';
+
+export default async function AdminScanPage({params}: {params: Promise<{scanId: string}>}) {
+  await requireAdmin();
+  const {scanId} = await params;
+  const [data,t,locale] = await Promise.all([adminScan(scanId),getTranslations('Phase8'),getLocale()]);
+  if (!data) notFound();
+  const {scan,site,jobs,modules} = data;
+  return <div className="space-y-6"><Link href="/admin/scans" className="text-sm text-primary hover:underline">← {t('scans.title')}</Link><AdminHeading eyebrow={t('scans.scanHistory')} title={`${t('scans.scan')} ${scan.id.slice(0,8)}`} description={site ? `${site.name} · ${site.domain}` : scan.site_id} />
+    <AdminSection title={t('scans.details')}><dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-muted-foreground">{t('status')}</dt><dd className="font-medium">{t(`state.${scan.status}`)}</dd></div><div><dt className="text-muted-foreground">{t('scans.kind')}</dt><dd>{t(`state.${scan.kind}`)}</dd></div><div><dt className="text-muted-foreground">{t('sites.score')}</dt><dd>{scan.score ?? '—'}</dd></div><div><dt className="text-muted-foreground">{t('sites.owner')}</dt><dd>{site && <Link href={`/admin/users/${site.owner_id}`} className="text-primary hover:underline">{site.owner_id}</Link>}</dd></div><div><dt className="text-muted-foreground">{t('created')}</dt><dd><DateText value={scan.created_at} locale={locale} /></dd></div><div><dt className="text-muted-foreground">{t('scans.started')}</dt><dd><DateText value={scan.started_at} locale={locale} /></dd></div><div><dt className="text-muted-foreground">{t('scans.completed')}</dt><dd><DateText value={scan.completed_at} locale={locale} /></dd></div><div><dt className="text-muted-foreground">{t('billing.error')}</dt><dd className="break-all font-mono text-xs">{scan.failure_code ?? '—'}</dd></div></dl><div className="mt-5">{scan.status === 'failed' && <AdminActionButton payload={{kind:'requeue_scan',id:scan.id}} label={t('scans.requeue')} />}{['queued','running'].includes(scan.status) && <AdminActionButton payload={{kind:'cancel_scan',id:scan.id}} label={t('scans.cancel')} destructive />}</div></AdminSection>
+    <AdminSection title={t('scans.jobs')}>{jobs.length ? <div className="space-y-3">{jobs.map((job) => <article key={job.id} className="rounded-lg border p-4 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong>{job.module_key} / {job.step_key}</strong><span>{t(`state.${job.status}`)}</span></div><p className="mt-1 break-all font-mono text-xs text-muted-foreground">{job.id}</p><dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-muted-foreground">{t('scans.attempts')}</dt><dd>{job.attempts}/{job.max_attempts}</dd></div><div><dt className="text-muted-foreground">{t('billing.error')}</dt><dd className="font-mono text-xs">{job.last_error_code ?? '—'}</dd></div><div><dt className="text-muted-foreground">{t('scans.available')}</dt><dd><DateText value={job.available_at} locale={locale} /></dd></div><div><dt className="text-muted-foreground">{t('scans.completed')}</dt><dd><DateText value={job.completed_at} locale={locale} /></dd></div></dl></article>)}</div> : <AdminEmpty text={t('noResults')} />}</AdminSection>
+    <AdminSection title={t('scans.moduleResults')}>{modules.length ? <ul className="divide-y text-sm">{modules.map((module) => <li key={module.id} className="flex flex-wrap justify-between gap-2 py-3"><span>{module.module_key} · {t(`state.${module.status}`)}</span><span className="font-mono text-xs text-muted-foreground">{module.error_code ?? '—'}</span></li>)}</ul> : <AdminEmpty text={t('noResults')} />}</AdminSection>
+  </div>;
+}

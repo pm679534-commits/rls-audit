@@ -1,0 +1,20 @@
+import {getTranslations} from 'next-intl/server';
+import {notFound} from 'next/navigation';
+import {requireAdmin} from '@/lib/auth';
+import {adminUser} from '@/lib/admin/data';
+import {AdminHeading, AdminSection, AdminEmpty, DateText} from '@/components/admin/primitives';
+import {AdminForm, AdminActionButton} from '@/components/admin/controls';
+import {Link} from '@/i18n/navigation';
+
+export default async function AdminUserPage({params}: {params: Promise<{userId: string}>}) {
+  await requireAdmin();
+  const {userId} = await params;
+  const [data,t] = await Promise.all([adminUser(userId),getTranslations('Phase8')]);
+  if (!data.profile) notFound();
+  const p = data.profile;
+  return <div className="space-y-6"><Link href="/admin/users" className="text-sm text-primary hover:underline">← {t('users.back')}</Link><AdminHeading eyebrow={t('users.title')} title={p.display_name || p.email} description={p.email} />
+    <div className="grid gap-6 xl:grid-cols-2"><AdminSection title={t('users.account')}><dl className="grid grid-cols-2 gap-3 text-sm"><dt>{t('users.role')}</dt><dd>{t(`state.${p.role}`)}</dd><dt>{t('users.locale')}</dt><dd>{p.locale}</dd><dt>{t('users.trialStarted')}</dt><dd><DateText value={p.trial_started_at} locale={p.locale} /></dd><dt>{t('users.trialEnds')}</dt><dd><DateText value={p.trial_ends_at} locale={p.locale} /></dd><dt>{t('status')}</dt><dd>{p.suspended ? t('users.suspended') : t('users.active')}</dd><dt>{t('users.emailVerified')}</dt><dd>{data.emailConfirmedAt ? <DateText value={data.emailConfirmedAt} locale={p.locale} /> : t('users.notVerified')}</dd></dl><div className="mt-5 flex flex-wrap gap-2">{!data.emailConfirmedAt && <AdminActionButton payload={{kind: 'verify_email', id: p.id}} label={t('users.forceVerify')} />}<AdminActionButton payload={{kind: 'suspend', id: p.id, suspended: !p.suspended}} label={p.suspended ? t('users.unsuspend') : t('users.suspend')} /><AdminActionButton payload={{kind: 'delete_user', id: p.id}} label={t('delete')} confirmMessage={t('users.deleteConfirm')} destructive /></div></AdminSection>
+      <AdminSection title={t('users.entitlements')}><p className="mb-4 text-sm">{t('users.subscription')}: {data.subscription ? `${t(`plan.${data.subscription.plan_id}`)} · ${t(`state.${data.subscription.status}`)}` : t('users.none')}</p><div className="space-y-5"><AdminForm kind="trial" fixed={{id: p.id}} fields={[{name:'mode',label:t('users.trialAction'),type:'select',options:[{value:'extend',label:t('users.extendTrial')},{value:'end',label:t('users.endTrial')}]},{name:'days',label:t('users.days'),type:'number',value:3,min:1,max:365}]} submitLabel={t('save')} successLabel={t('saved')} /><AdminForm kind="plan" fixed={{id: p.id}} fields={[{name:'plan',label:t('users.planOverride'),type:'select',value:p.plan_override ?? 'none',options:[{value:'none',label:t('users.none')},...(['starter','pro','agency'] as const).map((plan) => ({value:plan,label:t(`plan.${plan}`)}))]}]} submitLabel={t('save')} successLabel={t('saved')} /></div></AdminSection></div>
+    <div className="grid gap-6 xl:grid-cols-2"><AdminSection title={`${t('nav.sites')} (${data.sites.length})`}>{data.sites.length ? <ul className="divide-y text-sm">{data.sites.map((site) => <li key={site.id} className="flex justify-between gap-3 py-3"><span className="font-medium">{site.name}<small className="block text-muted-foreground">{site.domain}</small></span><span>{t(`state.${site.status}`)} · {site.last_score ?? '—'}</span></li>)}</ul> : <AdminEmpty text={t('noResults')} />}</AdminSection><AdminSection title={t('users.recentScans')}>{data.scans.length ? <ul className="divide-y text-sm">{data.scans.map((scan) => <li key={scan.id} className="flex justify-between gap-3 py-3"><span><Link href={`/admin/scans/${scan.id}`} className="text-primary hover:underline">{t(`state.${scan.kind}`)} · {t(`state.${scan.status}`)}</Link><small className="block text-muted-foreground">{scan.failure_code}</small></span><DateText value={scan.created_at} locale={p.locale} /></li>)}</ul> : <AdminEmpty text={t('noResults')} />}</AdminSection></div>
+  </div>;
+}
