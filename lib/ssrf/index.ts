@@ -107,17 +107,25 @@ async function checkedAddress(url: URL, timeoutMs: number): Promise<{address: st
     lookup(hostname, {all: true, verbatim: true}),
     new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error('DNS resolution timed out')), timeoutMs); })
   ]).finally(() => { if (timer) clearTimeout(timer); });
-  if (!addresses.length || addresses.some(({address}) => !isPublicIp(address))) throw new ValidationError();
+  if (!addresses.length || addresses.some(({address, family}) =>
+    typeof address !== 'string' || (family !== 4 && family !== 6) || !isPublicIp(address) || isIP(address) !== family)) throw new ValidationError();
   return {address: addresses[0].address, family: addresses[0].family as 4 | 6};
 }
 
 function requestPinned(url: URL, ip: {address: string; family: 4 | 6}, options: {method: 'GET' | 'HEAD' | 'POST'; timeoutMs: number; maxBytes: number; body?: string}, headers: Record<string, string>): Promise<SafeResponse> {
+  if (!ip.address || !isPublicIp(ip.address) || isIP(ip.address) !== ip.family) throw new ValidationError();
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? httpsRequest : httpRequest;
     const req = transport(url, {
       method: options.method,
       headers: {...headers, 'user-agent': `SiteGuard-SecurityScanner/1.0 (+${getSiteUrl().origin})`, 'accept-encoding': 'identity'},
-      lookup: (_host, _opts, callback) => callback(null, ip.address, ip.family),
+      lookup: (_host, lookupOptions, callback) => {
+        if (typeof lookupOptions === 'object' && lookupOptions !== null && lookupOptions.all === true) {
+          callback(null, [{address: ip.address, family: ip.family}]);
+        } else {
+          callback(null, ip.address, ip.family);
+        }
+      },
       servername: url.hostname.replace(/^\[|\]$/g, ''),
       timeout: options.timeoutMs,
       maxHeaderSize: 32 * 1024,
