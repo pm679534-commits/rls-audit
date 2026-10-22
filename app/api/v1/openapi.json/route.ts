@@ -1,4 +1,5 @@
 import {getSiteUrl} from '@/lib/config';
+import {toRouteError} from '@/lib/errors';
 
 export const runtime = 'nodejs';
 const error = {type: 'object', required: ['error'], properties: {error: {type: 'object', required: ['code','message'], properties: {code: {type: 'string'}, message: {type: 'string'}}}}};
@@ -14,6 +15,7 @@ const uuid = {name: 'siteId', in: 'path', required: true, schema: {type: 'string
 const scanId = {...uuid, name: 'scanId'};
 const exportId = {...uuid, name: 'id'};
 export async function GET() {
+  try {
   const document = {openapi: '3.1.0', info: {title: 'SiteGuard API', version: '1.0.0', description: 'Versioned API for verified site scans. Pro keys provide limited access; Agency keys enable exports and CI.'},
     servers: [{url: getSiteUrl().origin}], components: {securitySchemes: {apiKey: {type: 'http', scheme: 'bearer', bearerFormat: 'SiteGuard API key'}}, schemas: {
       Error: error, Site: {type: 'object', properties: {id: {type: 'string', format: 'uuid'}, name: {type: 'string'}, domain: {type: 'string'}, last_score: {type: ['integer','null']}}}}},
@@ -28,4 +30,5 @@ export async function GET() {
       '/api/v1/ci': {post: {...operation('Enforce scan score and critical finding thresholds (Agency)', 'ci:write'), requestBody: {required: true, content: {'application/json': {schema: {type: 'object', required: ['siteId'], properties: {siteId: {type: 'string', format: 'uuid'}, minScore: {type: 'integer', minimum: 0, maximum: 100, default: 80}, maxCritical: {type: 'integer', minimum: 0, maximum: 100, default: 0}}}}}}, responses: {...responses, 200: {description: 'Thresholds passed'}, 422: {description: 'Thresholds failed'}}}}
     }};
   return Response.json(document, {headers: {'Cache-Control': 'public, max-age=3600', 'Access-Control-Allow-Origin': '*'}});
+  } catch (error) { return toRouteError(error, {'Cache-Control': 'no-store'}, 'en', 'openapi_failed'); }
 }

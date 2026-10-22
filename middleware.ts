@@ -1,7 +1,7 @@
 import createMiddleware from 'next-intl/middleware';
 import {createServerClient} from '@supabase/ssr';
 import {NextResponse, type NextRequest} from 'next/server';
-import {getPublicEnv} from '@/lib/public-env';
+import {getPublicSupabaseEnv} from '@/lib/public-env';
 import {routing} from '@/i18n/routing';
 
 const intlMiddleware = createMiddleware(routing);
@@ -37,7 +37,7 @@ function securityHeaders(response: NextResponse, nonce: string, csp: string) {
 }
 
 export async function middleware(request: NextRequest) {
-  const env = getPublicEnv();
+  const env = getPublicSupabaseEnv();
   const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
   const csp = contentSecurityPolicy(nonce, env.NEXT_PUBLIC_SUPABASE_URL);
   const requestHeaders = new Headers(request.headers);

@@ -5,7 +5,7 @@ import {paddleClient} from '@/lib/billing/paddle';
 import {billingProvider} from '@/lib/billing/paddle';
 import {syncSubscription, notifyPaymentFailed} from '@/lib/billing/sync';
 import {createAdminClient} from '@/lib/supabase/admin';
-import {logger} from '@/lib/logger';
+import {logger, logUnexpectedError} from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -36,7 +36,7 @@ async function readWebhookBody(request: Request): Promise<string | null> {
   } catch { return null; } finally { reader.releaseLock(); }
 }
 
-export async function POST(request: Request) {
+async function handleWebhook(request: Request) {
   const signature = request.headers.get('paddle-signature');
   if (!signature || Number(request.headers.get('content-length') ?? 0) > 1_000_000) return new Response(null, {status: 400});
   const body = await readWebhookBody(request);
@@ -96,8 +96,16 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ok: true});
   } catch (error) {
-    logger.error('billing_webhook_failed', {eventType: event.eventType, eventId: event.eventId, failureClass: error instanceof Error ? error.name : 'unknown'});
+    const requestId = logUnexpectedError('billing_webhook_failed', error, {eventType: event.eventType});
     await db.from('billing_events').update({processing_error: 'processing_failed', processing_started_at: null}).eq('provider_event_id', event.eventId);
-    return new Response(null, {status: 503});
+    return new Response(null, {status: 503, headers: {'X-Request-ID': requestId}});
+  }
+}
+
+export async function POST(request: Request) {
+  try { return await handleWebhook(request); }
+  catch (error) {
+    const requestId = logUnexpectedError('billing_webhook_unhandled', error);
+    return new Response(null, {status: 503, headers: {'X-Request-ID': requestId}});
   }
 }

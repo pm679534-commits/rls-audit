@@ -31,7 +31,7 @@ export async function apiEndpoint(request: Request, scope: Scope, name: string,
     const {error: usageError} = await createAdminClient().from('api_keys').update({last_used_at: new Date().toISOString()}).eq('id', context.key.id);
     if (usageError) throw usageError;
     return await run(context, headers);
-  } catch (error) { return toRouteError(error, headers); }
+  } catch (error) { return toRouteError(error, headers, 'en', `api_v1_${name}_failed`); }
 }
 
 export function json(data: unknown, headers: Headers, status = 200): Response {

@@ -36,6 +36,23 @@ const serverSchema = publicSchema.extend({
 
 export type ServerEnv = z.infer<typeof serverSchema>;
 
+const serviceRoleSchema = z.object({
+  NEXT_PUBLIC_SUPABASE_URL: publicSchema.shape.NEXT_PUBLIC_SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1)
+});
+
+let cachedServiceRole: z.infer<typeof serviceRoleSchema> | undefined;
+export function getServiceRoleEnv() {
+  return cachedServiceRole ??= parseEnv(serviceRoleSchema, process.env, 'Supabase service role');
+}
+
+export function getOptionalTurnstileEnv() {
+  return {
+    siteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || undefined,
+    secretKey: process.env.TURNSTILE_SECRET_KEY?.trim() || undefined
+  };
+}
+
 function parseEnv<T extends z.ZodTypeAny>(schema: T, values: unknown, scope: string): z.infer<T> {
   const parsed = schema.safeParse(values);
   if (parsed.success) return parsed.data;

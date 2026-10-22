@@ -8,7 +8,7 @@ import {TLSSocket} from 'node:tls';
 import {getDomain} from 'tldts';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {ValidationError} from '@/lib/errors';
-import {getPublicEnv} from '@/lib/env';
+import {getSiteUrl} from '@/lib/config';
 
 const MAX_REDIRECTS = 4;
 const DEFAULT_BYTES = 1024 * 1024;
@@ -116,7 +116,7 @@ function requestPinned(url: URL, ip: {address: string; family: 4 | 6}, options: 
     const transport = url.protocol === 'https:' ? httpsRequest : httpRequest;
     const req = transport(url, {
       method: options.method,
-      headers: {...headers, 'user-agent': `SiteGuard-SecurityScanner/1.0 (+${getPublicEnv().NEXT_PUBLIC_SITE_URL})`, 'accept-encoding': 'identity'},
+      headers: {...headers, 'user-agent': `SiteGuard-SecurityScanner/1.0 (+${getSiteUrl().origin})`, 'accept-encoding': 'identity'},
       lookup: (_host, _opts, callback) => callback(null, ip.address, ip.family),
       servername: url.hostname.replace(/^\[|\]$/g, ''),
       timeout: options.timeoutMs,

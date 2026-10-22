@@ -1,16 +1,16 @@
 import 'server-only';
 
 import {z} from 'zod';
-import {getServerEnv} from '@/lib/env';
+import {getOptionalTurnstileEnv} from '@/lib/env';
 import {ValidationError, ExternalServiceError} from '@/lib/errors';
 
 const responseSchema = z.object({success: z.boolean(), hostname: z.string().optional(), action: z.string().optional()});
 
 export async function verifyTurnstile(token: string | undefined, options: {ip?: string; action?: string; hostname?: string} = {}): Promise<void> {
-  const secret = getServerEnv().TURNSTILE_SECRET_KEY;
-  if (!secret) return;
+  const {siteKey, secretKey} = getOptionalTurnstileEnv();
+  if (!siteKey || !secretKey) return;
   if (!token || token.length > 4096) throw new ValidationError();
-  const body = new URLSearchParams({secret, response: token});
+  const body = new URLSearchParams({secret: secretKey, response: token});
   if (options.ip) body.set('remoteip', options.ip);
   let response: Response;
   try {

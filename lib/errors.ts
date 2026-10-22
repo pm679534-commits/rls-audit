@@ -5,6 +5,7 @@ import {ZodError} from 'zod';
 import type {Locale} from '@/i18n/routing';
 import en from '@/messages/en.json';
 import az from '@/messages/az.json';
+import {logUnexpectedError} from '@/lib/logger';
 
 export type AppErrorCode = 'UNAUTHENTICATED' | 'EMAIL_UNVERIFIED' | 'SUSPENDED' | 'FORBIDDEN' | 'READ_ONLY' | 'NOT_FOUND' | 'CONFLICT' | 'DISPOSABLE_EMAIL' | 'BLOCKED_DOMAIN' | 'DOMAIN_CLAIMED' | 'INVALID_INPUT' | 'RATE_LIMITED' | 'EXTERNAL_SERVICE' | 'INTERNAL';
 
@@ -43,17 +44,20 @@ function publicDetails(details: Record<string, string[]> | undefined, locale: Lo
   return details ? Object.fromEntries(Object.keys(details).map((field) => [field, [publicMessage('INVALID_INPUT', locale)]])) : undefined;
 }
 
-export function toActionError(error: unknown, locale: Locale = 'en') {
+export function toActionError(error: unknown, locale: Locale = 'en', event = 'server_action_failed') {
   const mapped = toAppError(error);
-  return {ok: false as const, error: {code: mapped.code, message: publicMessage(mapped.code, locale), ...(mapped.details ? {details: publicDetails(mapped.details, locale)} : {}), ...(mapped instanceof RateLimitError ? {retryAfter: mapped.retryAfter} : {})}};
+  const requestId = mapped.status >= 500 ? logUnexpectedError(event, error) : undefined;
+  return {ok: false as const, error: {code: mapped.code, message: publicMessage(mapped.code, locale), ...(requestId ? {requestId} : {}), ...(mapped.details ? {details: publicDetails(mapped.details, locale)} : {}), ...(mapped instanceof RateLimitError ? {retryAfter: mapped.retryAfter} : {})}};
 }
 
-export function toRouteError(error: unknown, headers?: HeadersInit, locale: Locale = 'en') {
+export function toRouteError(error: unknown, headers?: HeadersInit, locale: Locale = 'en', event = 'route_failed') {
   const mapped = toAppError(error);
   const responseHeaders = new Headers(headers);
+  const requestId = mapped.status >= 500 ? logUnexpectedError(event, error) : undefined;
+  if (requestId) responseHeaders.set('X-Request-ID', requestId);
   if (mapped instanceof RateLimitError) {
     mapped.rateHeaders?.forEach((value, key) => responseHeaders.set(key, value));
     responseHeaders.set('Retry-After', String(mapped.retryAfter));
   }
-  return NextResponse.json({error: {code: mapped.code, message: publicMessage(mapped.code, locale), ...(mapped.details ? {details: publicDetails(mapped.details, locale)} : {})}}, {status: mapped.status, headers: responseHeaders});
+  return NextResponse.json({error: {code: mapped.code, message: publicMessage(mapped.code, locale), ...(requestId ? {requestId} : {}), ...(mapped.details ? {details: publicDetails(mapped.details, locale)} : {})}}, {status: mapped.status, headers: responseHeaders});
 }

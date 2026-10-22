@@ -6,7 +6,6 @@ import {getPublicEnv} from '@/lib/env';
 import {ForbiddenError, toActionError} from '@/lib/errors';
 import {getSession, requireAdmin, requireUser, type UserContext} from '@/lib/auth';
 import {checkActionRateLimit, trustedClientIp} from '@/lib/rate-limit';
-import {logger} from '@/lib/logger';
 import type {Locale} from '@/i18n/routing';
 
 type Access = 'public' | 'user' | 'admin';
@@ -43,9 +42,7 @@ export function createServerAction<Schema extends ZodTypeAny, Output>(
       }
       return {ok: true, data: await handler(input, context)};
     } catch (error) {
-      const mapped = toActionError(error, locale);
-      logger.error('server_action_failed', {code: mapped.error.code});
-      return mapped;
+      return toActionError(error, locale, `server_action_${options.rateLimit?.name ?? 'failed'}`);
     }
   };
 }

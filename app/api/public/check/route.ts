@@ -36,6 +36,6 @@ export async function POST(request: Request) {
       findings: result.findings.map(({id, severity, titleKey}) => ({id, severity, titleKey}))},
     {headers: {'Cache-Control': 'no-store', ...Object.fromEntries(result.headers.entries())}});
   } catch (error) {
-    return toRouteError(error, {'Cache-Control': 'no-store'});
+    return toRouteError(error, {'Cache-Control': 'no-store'}, 'en', 'public_check_failed');
   }
 }

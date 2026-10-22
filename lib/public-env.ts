@@ -16,6 +16,16 @@ export const publicSchema = z.object({
 
 export type PublicEnv = z.infer<typeof publicSchema>;
 
+export function getPublicSiteUrl(): string {
+  return url.parse(process.env.NEXT_PUBLIC_SITE_URL);
+}
+
+const publicSupabaseSchema = publicSchema.pick({NEXT_PUBLIC_SUPABASE_URL: true, NEXT_PUBLIC_SUPABASE_ANON_KEY: true});
+let cachedPublicSupabase: z.infer<typeof publicSupabaseSchema> | undefined;
+export function getPublicSupabaseEnv() {
+  return cachedPublicSupabase ??= publicSupabaseSchema.parse(process.env);
+}
+
 let cachedPublic: PublicEnv | undefined;
 export function getPublicEnv(): PublicEnv {
   if (cachedPublic) return cachedPublic;

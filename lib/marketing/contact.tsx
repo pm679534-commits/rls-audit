@@ -6,7 +6,7 @@ import {createServerAction} from '@/lib/actions';
 import {getSiteUrl} from '@/lib/config';
 import {getCompanyDetails} from '@/lib/config.server';
 import {sendEmail} from '@/lib/email';
-import {logger} from '@/lib/logger';
+import {logUnexpectedError} from '@/lib/logger';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {verifyTurnstile} from '@/lib/turnstile';
 import {emailSchema, localeSchema} from '@/lib/validation';
@@ -31,6 +31,6 @@ export const sendContactMessage = createServerAction(schema, async (input, conte
       replyTo: input.email, idempotencyKey: `contact-${data.id}`,
       content: <><Text>{copy.emailIntro}</Text><Text>{input.name} · {input.email}</Text>
         <Text>{input.subject}</Text><Text style={{whiteSpace: 'pre-wrap'}}>{input.body}</Text></>});
-  } catch { logger.error('contact_notification_failed'); }
+  } catch (error) { logUnexpectedError('contact_notification_failed', error); }
   return {sent: true};
 }, {access: 'public', rateLimit: {name: 'contact', limit: 5, windowSeconds: 3600}});

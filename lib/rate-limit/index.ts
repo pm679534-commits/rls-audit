@@ -36,9 +36,8 @@ export async function enforceRateLimit(key: string, limit: number, windowSeconds
 }
 
 export function trustedClientIp(headers: Pick<Headers, 'get'>): string {
-  const candidates = process.env.NODE_ENV === 'production'
-    ? [headers.get('x-vercel-forwarded-for')]
-    : [headers.get('x-vercel-forwarded-for'), headers.get('x-real-ip'), headers.get('x-forwarded-for')];
+  // Vercel sets these headers itself; prefer its dedicated header when present.
+  const candidates = [headers.get('x-vercel-forwarded-for'), headers.get('x-forwarded-for'), headers.get('x-real-ip')];
   for (const header of candidates) {
     const value = header?.split(',')[0]?.trim();
     if (value && isIP(value)) return value;
