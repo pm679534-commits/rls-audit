@@ -10,6 +10,10 @@ function redact(value: unknown, depth = 0, key = ''): unknown {
   if (depth > 3) return '[redacted]';
   if (value instanceof Error) return {name: value.name};
   if (typeof value === 'string') {
+    if (['siteId', 'scanId', 'challengeId', 'requesterId'].includes(key) && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value)) return value;
+    if (key === 'method' && /^(?:dns_txt|meta_tag|well_known_file)$/.test(value)) return value;
+    if (key === 'kind' && /^(?:manual|passive|automatic|api)$/.test(value)) return value;
+    if (key === 'reasonCode' && /^[a-z][a-z0-9_]{1,39}$/.test(value)) return value;
     if (key === 'code' && /^[A-Z][A-Z0-9_]{1,39}$/.test(value)) return value;
     if (key === 'status' && /^(?:queued|running|completed|failed|canceled|succeeded|dead)$/.test(value)) return value;
     return '[redacted]';

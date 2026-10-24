@@ -241,6 +241,7 @@ export type Database = {
       rate_limit_check: {Args: {p_key: string; p_limit: number; p_window: string}; Returns: boolean};
       claim_scan_jobs: {Args: {p_limit: number; p_worker: string; p_lease_seconds?: number}; Returns: Database['public']['Tables']['scan_jobs']['Row'][]};
       recover_stuck_jobs: {Args: {p_limit?: number}; Returns: number};
+      start_scan: {Args: {p_site: string; p_kind: ScanKind; p_requester: string | null; p_idempotency?: string | null; p_priority?: number}; Returns: Database['public']['Tables']['scans']['Row']};
       enqueue_due_scans: {Args: {p_limit?: number}; Returns: number};
       purge_expired_scan_history: {Args: {p_limit?: number}; Returns: number};
       queue_notification_delivery: {Args: Record<string, never>; Returns: unknown};

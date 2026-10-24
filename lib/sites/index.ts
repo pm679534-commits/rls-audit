@@ -1,13 +1,14 @@
 import 'server-only';
 
-import {resolveTxt} from 'node:dns/promises';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {requireCanAddSite, requireSiteAccess, requireUser} from '@/lib/auth';
 import {BlockedDomainError, ConflictError, DomainClaimedError, ForbiddenError, NotFoundError, ValidationError} from '@/lib/errors';
-import {secureRandomToken, constantTimeEqual} from '@/lib/crypto';
-import {normalizeSiteUrl, safeFetch} from '@/lib/ssrf';
+import {secureRandomToken} from '@/lib/crypto';
+import {normalizeSiteUrl} from '@/lib/ssrf';
 import {systemNumberSetting} from '@/lib/system/config';
+import {logger, logUnexpectedError} from '@/lib/logger';
 import type {Tables, Enums} from '@/types/database';
+import {verifyChallengeEvidence, type VerificationOutcome} from './verification';
 
 const CHALLENGE_HOURS = 24;
 type Method = Enums<'verification_method'>;
@@ -70,47 +71,35 @@ export async function beginVerification(siteId: string, method: Method): Promise
   const site = await requireSiteAccess(siteId, 'edit');
   if (site.status !== 'active') throw new ForbiddenError();
   const token = `siteguard-${secureRandomToken(24)}`;
-  const {data, error} = await createAdminClient().from('site_verifications').insert({site_id: site.id, method, challenge_value: token, expires_at: new Date(Date.now() + CHALLENGE_HOURS * 3600_000).toISOString()}).select('*').single();
+  const db = createAdminClient();
+  const {error: expireError} = await db.from('site_verifications').update({status: 'expired', error_code: 'replaced'}).eq('site_id', site.id).eq('status', 'pending');
+  if (expireError) throw new Error('Could not replace verification challenge');
+  const {data, error} = await db.from('site_verifications').insert({site_id: site.id, method, challenge_value: token, expires_at: new Date(Date.now() + CHALLENGE_HOURS * 3600_000).toISOString()}).select('*').single();
   if (error || !data) throw new Error('Could not create verification challenge');
+  logger.info('verification.challenge_started', {siteId: site.id, challengeId: data.id, method});
   return data;
 }
 
-function attr(tag: string, name: string): string | null {
-  const match = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i').exec(tag);
-  return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
-}
-
-async function verifyChallenge(site: Tables<'sites'>, challenge: Tables<'site_verifications'>): Promise<boolean> {
-  if (challenge.method === 'dns_txt') {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const records = await Promise.race([resolveTxt(`_siteguard.${site.domain}`), new Promise<never>((_resolve, reject) => {timer = setTimeout(() => reject(new Error('DNS timeout')), 5000);})]).finally(() => {if (timer) clearTimeout(timer);});
-    return records.some((parts) => constantTimeEqual(parts.join(''), challenge.challenge_value));
-  }
-  const path = challenge.method === 'meta_tag' ? '/' : '/.well-known/siteguard-verification.txt';
-  const url = new URL(path, site.normalized_url).toString();
-  const response = await safeFetch(url, {followRedirects: false, maxRedirects: 0, maxBytes: 100_000, timeoutMs: 5000});
-  if (response.status !== 200 || new URL(response.url).hostname !== new URL(site.normalized_url).hostname) return false;
-  const body = response.body.toString('utf8');
-  if (challenge.method === 'well_known_file') return constantTimeEqual(body.trim(), challenge.challenge_value);
-  const tags = body.match(/<meta\b[^>]*>/gi) ?? [];
-  return tags.some((tag) => attr(tag, 'name')?.toLowerCase() === 'siteguard-verification' && attr(tag, 'content') === challenge.challenge_value);
-}
-
-async function checkVerification(site: Tables<'sites'>, challenge: Tables<'site_verifications'>, renewal: boolean): Promise<boolean> {
+async function checkVerification(site: Tables<'sites'>, challenge: Tables<'site_verifications'>, renewal: boolean): Promise<VerificationOutcome> {
   const db = createAdminClient();
   const now = new Date().toISOString();
   if (new Date(challenge.expires_at).getTime() <= Date.now() && !renewal) {
     await db.from('site_verifications').update({status: 'expired', checked_at: now, error_code: 'challenge_expired'}).eq('id', challenge.id);
-    return false;
+    return {verified: false, reason: 'challenge_expired'};
   }
-  let matched = false;
-  let errorCode: string | null = null;
-  try { matched = await verifyChallenge(site, challenge); }
-  catch { errorCode = 'verification_unavailable'; }
-  if (!matched) {
-    await db.from('site_verifications').update({status: renewal ? 'failed' : 'pending', attempts: challenge.attempts + 1, checked_at: now, error_code: errorCode ?? 'challenge_not_found'}).eq('id', challenge.id);
+  logger.info('verification.attempt_started', {siteId: site.id, challengeId: challenge.id, method: challenge.method});
+  let outcome: VerificationOutcome;
+  try { outcome = await verifyChallengeEvidence(site, challenge); }
+  catch (error) {
+    logUnexpectedError('verification.attempt_failed', error, {siteId: site.id, challengeId: challenge.id, method: challenge.method});
+    outcome = {verified: false, reason: 'verification_unavailable'};
+  }
+  logger.info('verification.attempt_finished', {siteId: site.id, challengeId: challenge.id, method: challenge.method, verified: outcome.verified, reasonCode: outcome.reason, httpStatus: outcome.httpStatus});
+  if (!outcome.verified) {
+    const {error: saveError} = await db.from('site_verifications').update({status: renewal ? 'failed' : 'pending', attempts: challenge.attempts + 1, checked_at: now, error_code: outcome.reason === 'http_status' ? `http_${outcome.httpStatus}` : outcome.reason}).eq('id', challenge.id);
+    if (saveError) throw new Error('Could not save verification attempt');
     if (renewal) await markVerificationFailed(site);
-    return false;
+    return outcome;
   }
   const verifyDays = await systemNumberSetting('verification_recheck_days', 30);
   let update = db.from('sites').update({verified_at: now, verification_due_at: new Date(Date.now() + verifyDays * 86400_000).toISOString(), next_scan_at: new Date().toISOString()}).eq('id', site.id).eq('domain', site.domain).eq('normalized_url', site.normalized_url);
@@ -123,7 +112,7 @@ async function checkVerification(site: Tables<'sites'>, challenge: Tables<'site_
   if (!updated) throw new ConflictError();
   const {error: verificationError} = await db.from('site_verifications').update({status: 'verified', attempts: challenge.attempts + 1, checked_at: now, verified_at: now, error_code: null}).eq('id', challenge.id);
   if (verificationError) throw new Error('Could not save verification result');
-  return true;
+  return {verified: true};
 }
 
 async function markVerificationFailed(site: Tables<'sites'>): Promise<void> {
@@ -136,7 +125,7 @@ async function markVerificationFailed(site: Tables<'sites'>): Promise<void> {
   }
 }
 
-export async function verifySiteNow(siteId: string): Promise<boolean> {
+export async function verifySiteNow(siteId: string): Promise<VerificationOutcome> {
   const site = await requireSiteAccess(siteId, 'edit');
   if (site.status !== 'active') throw new ForbiddenError();
   const {data: challenge} = await createAdminClient().from('site_verifications').select('*').eq('site_id', siteId).eq('status', 'pending').order('created_at', {ascending: false}).limit(1).maybeSingle();
@@ -147,14 +136,24 @@ export async function verifySiteNow(siteId: string): Promise<boolean> {
 export async function recheckDueVerifications(limit = 20): Promise<{checked: number; failed: number}> {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ValidationError();
   const db = createAdminClient();
-  const {data: sites, error} = await db.from('sites').select('*').eq('status', 'active').not('verified_at', 'is', null).lte('verification_due_at', new Date().toISOString()).order('verification_due_at').limit(limit);
-  if (error) throw new Error('Could not load due verifications');
+  const now = new Date().toISOString();
+  const {data: pending, error: pendingError} = await db.from('site_verifications').select('*').eq('status', 'pending').gt('expires_at', now).or(`checked_at.is.null,checked_at.lt.${new Date(Date.now() - 55 * 60_000).toISOString()}`).order('created_at').limit(limit);
+  if (pendingError) throw new Error('Could not load pending verifications');
+  let checked = 0;
   let failed = 0;
+  for (const challenge of pending ?? []) {
+    const {data: site} = await db.from('sites').select('*').eq('id', challenge.site_id).eq('status', 'active').maybeSingle();
+    if (!site || site.verified_at) continue;
+    if (!(await checkVerification(site, challenge, false)).verified) failed++;
+    checked++;
+  }
+  const {data: sites, error} = await db.from('sites').select('*').eq('status', 'active').not('verified_at', 'is', null).lte('verification_due_at', now).order('verification_due_at').limit(Math.max(0, limit - checked));
+  if (error) throw new Error('Could not load due verifications');
   for (const site of sites ?? []) {
     const {data: challenge} = await db.from('site_verifications').select('*').eq('site_id', site.id).eq('status', 'verified').order('verified_at', {ascending: false}).limit(1).maybeSingle();
     if (!challenge) {await markVerificationFailed(site); failed++;}
-    else if (!await checkVerification(site, challenge, true)) failed++;
+    else if (!(await checkVerification(site, challenge, true)).verified) failed++;
   }
-  return {checked: sites?.length ?? 0, failed};
+  return {checked: checked + (sites?.length ?? 0), failed};
 }
 

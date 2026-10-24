@@ -52,7 +52,13 @@ export function VerificationControls({site, challenge}: {site: Tables<'sites'>; 
     const result = await verifySiteAction({siteId: site.id});
     setBusy(false);
     if (!result.ok) setMessage(result.error.message);
-    else {setMessage(result.data.verified ? t('success') : t('notFound')); router.refresh();}
+    else {
+      const outcome = result.data;
+      setMessage(outcome.verified ? t('success') : outcome.reason === 'http_status'
+        ? t('reasons.http_status', {status: outcome.httpStatus ?? 0})
+        : t(`reasons.${outcome.reason ?? 'verification_unavailable'}`));
+      router.refresh();
+    }
   }
   const host = new URL(site.normalized_url).hostname;
   return <section className="rounded-xl border bg-card p-5" aria-labelledby="verify-heading">
@@ -61,7 +67,7 @@ export function VerificationControls({site, challenge}: {site: Tables<'sites'>; 
     <div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => begin('dns_txt')}>{t('dns')}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => begin('meta_tag')}>{t('meta')}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => begin('well_known_file')}>{t('file')}</Button></div>
     {challenge && <div className="mt-5 space-y-3 rounded-lg bg-muted p-4 text-sm">
       <p className="font-medium">{t(`method.${challenge.method}`)}</p>
-      {challenge.method === 'dns_txt' && <p>{t('dnsInstructions', {host: `_siteguard.${site.domain}`})}</p>}
+      {challenge.method === 'dns_txt' && <><p>{t('dnsInstructions', {host: `_siteguard.${site.domain}`})}</p><p>{t('dnsAlternative', {host: site.domain})}</p>{host === `www.${site.domain}` && <p>{t('dnsWwwAlternative', {host: `_siteguard.${host}`})}</p>}<p className="text-xs text-muted-foreground">{t('dnsDelay')}</p></>}
       {challenge.method === 'meta_tag' && <p>{extra('metaInstructions')}</p>}
       {challenge.method === 'well_known_file' && <p>{t('fileInstructions', {path: `https://${host}/.well-known/siteguard-verification.txt`})}</p>}
       <code className="block break-all rounded bg-background p-3 select-all">{challenge.method === 'meta_tag' ? `<meta name="siteguard-verification" content="${challenge.challenge_value}">` : challenge.challenge_value}</code>
@@ -100,6 +106,7 @@ export function SiteControls({site}: {site: Tables<'sites'>}) {
 
 export function FirstScanButton({siteId, kind = 'manual'}: {siteId: string; kind?: 'manual' | 'passive'}) {
   const t = useTranslations('Phase5.sites');
+  const locale = useLocale();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -107,7 +114,10 @@ export function FirstScanButton({siteId, kind = 'manual'}: {siteId: string; kind
     setBusy(true); setMessage('');
     const result = await startScanAction({siteId, kind, idempotencyKey: crypto.randomUUID()});
     setBusy(false);
-    if (!result.ok) setMessage(result.error.message);
+    if (!result.ok) {
+      setMessage(result.error.code === 'SCAN_IN_PROGRESS' ? t('scanInProgress') : result.error.message);
+      if (result.error.code === 'SCAN_IN_PROGRESS') {router.push(`/${locale}/dashboard/sites/${siteId}`); router.refresh();}
+    }
     else {setMessage(t('scanQueued')); router.refresh();}
   };
   return <div><Button type="button" disabled={busy} onClick={start}>{busy ? t('working') : t('startScan')}</Button>{message && <p role="status" className="mt-2 text-sm">{message}</p>}</div>;

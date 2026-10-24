@@ -4,7 +4,7 @@ import {z} from 'zod';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {createClient as createUserClient} from '@/lib/supabase/server';
 import {requireUser, requireWritableAccount} from '@/lib/auth';
-import {ConflictError, ForbiddenError, NotFoundError, ValidationError} from '@/lib/errors';
+import {ConflictError, ForbiddenError, NotFoundError, ScanInProgressError, ValidationError} from '@/lib/errors';
 import {logger} from '@/lib/logger';
 import {safeFetch} from '@/lib/ssrf';
 import {parseApiKey, verifyApiKey} from '@/lib/crypto';
@@ -86,19 +86,22 @@ async function insertScan(siteId: string, kind: Tables<'scans'>['kind'], request
     }
   }
   const priority = (await ownerPlan(site.owner_id)) === 'agency' ? 10 : 0;
-  const {data: scan, error} = await db.from('scans').insert({site_id: siteId, kind, requested_by: requesterId, idempotency_key: idempotencyKey ?? null}).select('*').single();
+  logger.info('scan.start_requested', {siteId, requesterId, kind});
+  const {data: scan, error} = await db.rpc('start_scan', {p_site: siteId, p_kind: kind, p_requester: requesterId, p_idempotency: idempotencyKey ?? null, p_priority: priority});
   if (error || !scan) {
     if (idempotencyKey && error?.code === '23505') {
       const {data: existing} = await db.from('scans').select('*').eq('idempotency_key', idempotencyKey).maybeSingle();
       if (existing && existing.site_id === siteId && existing.requested_by === requesterId && existing.kind === kind) return existing;
     }
-    throw new ConflictError();
-  }
-  const {error: queueError} = await db.from('scan_jobs').insert({scan_id: scan.id, module_key: 'orchestrator', step_key: 'bootstrap', priority});
-  if (queueError) {
-    await db.from('scans').delete().eq('id', scan.id);
+    const code = error?.code ?? 'UNKNOWN';
+    logger.warn('scan.start_rejected', {siteId, requesterId, kind, code});
+    if (code === 'SG001' || code === '23505') throw new ScanInProgressError();
+    if (code === 'SG002') throw new ConflictError();
+    if (code === '42501' || code === '23514') throw new ForbiddenError();
+    if (code === 'P0002') throw new NotFoundError();
     throw new Error('Could not queue scan');
   }
+  logger.info('scan.start_queued', {siteId, scanId: scan.id, requesterId, kind});
   return scan;
 }
 

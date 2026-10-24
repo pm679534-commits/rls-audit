@@ -7,7 +7,7 @@ import en from '@/messages/en.json';
 import az from '@/messages/az.json';
 import {logUnexpectedError} from '@/lib/logger';
 
-export type AppErrorCode = 'UNAUTHENTICATED' | 'EMAIL_UNVERIFIED' | 'SUSPENDED' | 'FORBIDDEN' | 'READ_ONLY' | 'NOT_FOUND' | 'CONFLICT' | 'DISPOSABLE_EMAIL' | 'BLOCKED_DOMAIN' | 'DOMAIN_CLAIMED' | 'INVALID_INPUT' | 'RATE_LIMITED' | 'EXTERNAL_SERVICE' | 'INTERNAL';
+export type AppErrorCode = 'UNAUTHENTICATED' | 'EMAIL_UNVERIFIED' | 'SUSPENDED' | 'FORBIDDEN' | 'READ_ONLY' | 'NOT_FOUND' | 'CONFLICT' | 'SCAN_IN_PROGRESS' | 'DISPOSABLE_EMAIL' | 'BLOCKED_DOMAIN' | 'DOMAIN_CLAIMED' | 'INVALID_INPUT' | 'RATE_LIMITED' | 'EXTERNAL_SERVICE' | 'INTERNAL';
 
 export class AppError extends Error {
   constructor(public readonly code: AppErrorCode, public readonly status: number, message: string, public readonly details?: Record<string, string[]>) {
@@ -23,6 +23,7 @@ export class ForbiddenError extends AppError { constructor() { super('FORBIDDEN'
 export class ReadOnlyError extends AppError { constructor() { super('READ_ONLY', 403, 'Your trial or subscription has expired.'); } }
 export class NotFoundError extends AppError { constructor() { super('NOT_FOUND', 404, 'Resource not found.'); } }
 export class ConflictError extends AppError { constructor(message = 'This request conflicts with an existing resource.') { super('CONFLICT', 409, message); } }
+export class ScanInProgressError extends AppError { constructor() { super('SCAN_IN_PROGRESS', 409, 'A scan is already in progress.'); } }
 export class DisposableEmailError extends AppError { constructor() { super('DISPOSABLE_EMAIL', 400, 'Disposable email addresses are not accepted.'); } }
 export class BlockedDomainError extends AppError { constructor() { super('BLOCKED_DOMAIN', 403, 'This domain cannot be scanned.'); } }
 export class DomainClaimedError extends AppError { constructor() { super('DOMAIN_CLAIMED', 409, 'This domain is already verified by another account.'); } }

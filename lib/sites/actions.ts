@@ -30,7 +30,7 @@ export async function beginVerificationAction(raw: unknown) {
 }
 
 export async function verifySiteAction(raw: unknown) {
-  return createServerAction(siteId, async (input) => ({verified: await verifySiteNow(input.siteId)}), {rateLimit: {name: 'verify-check', limit: 20, windowSeconds: 3600}})(raw);
+  return createServerAction(siteId, async (input) => verifySiteNow(input.siteId), {rateLimit: {name: 'verify-check', limit: 20, windowSeconds: 3600}})(raw);
 }
 
 export async function startScanAction(raw: unknown) {

@@ -13,7 +13,14 @@ import {getSiteUrl} from '@/lib/config';
 const MAX_REDIRECTS = 4;
 const DEFAULT_BYTES = 1024 * 1024;
 const DEFAULT_TIMEOUT = 10_000;
-const ALLOWED_REQUEST_HEADERS = new Set(['accept', 'accept-profile', 'apikey', 'origin', 'prefer', 'range']);
+const ALLOWED_REQUEST_HEADERS = new Set(['accept', 'accept-profile', 'apikey', 'cache-control', 'origin', 'prefer', 'range']);
+
+export class SafeRedirectError extends Error {
+  constructor(public readonly reason: 'redirect_loop' | 'redirect_limit') {
+    super(reason);
+    this.name = 'SafeRedirectError';
+  }
+}
 
 export type SafeResponse = {url: string; status: number; headers: IncomingHttpHeaders; body: Buffer; tls?: {validTo: string; authorized: boolean; protocol: string | null}};
 export type SafeRequestOptions = {method?: 'GET' | 'HEAD'; headers?: Record<string, string>; timeoutMs?: number; maxBytes?: number; maxRedirects?: number; followRedirects?: boolean; bearerToken?: string};
@@ -167,7 +174,10 @@ export async function safeFetch(input: string, options: SafeRequestOptions = {})
   const deadlineAt = Date.now() + timeoutMs;
   const providedHeaders = Object.fromEntries(Object.entries(options.headers ?? {}).filter(([name, value]) =>
     ALLOWED_REQUEST_HEADERS.has(name.toLowerCase()) && value.length <= 4096 && !/[\r\n]/.test(value)));
+  const seen = new Set<string>();
   for (let hop = 0; hop <= maxRedirects; hop++) {
+    if (seen.has(url.toString())) throw new SafeRedirectError('redirect_loop');
+    seen.add(url.toString());
     const dnsBudget = deadlineAt - Date.now();
     if (dnsBudget < 1) throw new Error('Request timed out');
     const ip = await checkedAddress(url, dnsBudget);
@@ -176,7 +186,8 @@ export async function safeFetch(input: string, options: SafeRequestOptions = {})
     const response = await requestPinned(url, ip, {method, timeoutMs: requestBudget, maxBytes}, hop === 0 ? {...providedHeaders, ...(options.bearerToken ? {authorization: `Bearer ${options.bearerToken}`} : {})} : {});
     if (![301, 302, 303, 307, 308].includes(response.status) || options.followRedirects === false) return response;
     const location = response.headers.location;
-    if (!location || hop === maxRedirects) throw new ValidationError();
+    if (!location) throw new ValidationError();
+    if (hop === maxRedirects) throw new SafeRedirectError('redirect_limit');
     url = normalizeUrl(new URL(location, url).toString());
   }
   throw new ValidationError();
