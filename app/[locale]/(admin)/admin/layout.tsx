@@ -1,10 +1,9 @@
 import {getTranslations} from 'next-intl/server';
 import {AdminShell} from '@/components/shells/admin-shell';
-import {requireAdmin} from '@/lib/auth';
+import {requirePageAdmin} from '@/lib/auth/page';
 
 export default async function AdminLayout({children}: {children: React.ReactNode}) {
-  await requireAdmin();
-  const t = await getTranslations('Phase8');
+  const [, t] = await Promise.all([requirePageAdmin(), getTranslations('Phase8')]);
   const navigation = [
     {href: '/admin', label: t('nav.overview')}, {href: '/admin/users', label: t('nav.users')},
     {href: '/admin/billing', label: t('nav.billing')}, {href: '/admin/sites', label: t('nav.sites')},

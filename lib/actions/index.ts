@@ -8,7 +8,7 @@ import {getSession, requireAdmin, requireUser, type UserContext} from '@/lib/aut
 import {checkActionRateLimit, trustedClientIp} from '@/lib/rate-limit';
 import type {Locale} from '@/i18n/routing';
 
-type Access = 'public' | 'user' | 'admin';
+type Access = 'public' | 'optional' | 'user' | 'admin';
 type ActionOptions = {access?: Access; locale?: Locale; rateLimit?: {name: string; limit: number; windowSeconds: number}};
 export type ActionResult<T> = {ok: true; data: T} | ReturnType<typeof toActionError>;
 
@@ -33,7 +33,8 @@ export function createServerAction<Schema extends ZodTypeAny, Output>(
       const page = referer ? new URL(referer) : null;
       const routeLocale = page?.origin === new URL(getPublicEnv().NEXT_PUBLIC_SITE_URL).origin && /^\/(en|az)(?:\/|$)/.exec(page.pathname)?.[1];
       if (routeLocale === 'en' || routeLocale === 'az') locale = routeLocale;
-      const context = options.access === 'admin' ? await requireAdmin() : options.access === 'public' ? await getSession() : await requireUser();
+      const context = options.access === 'admin' ? await requireAdmin() : options.access === 'public' ? null :
+        options.access === 'optional' ? await getSession() : await requireUser();
       if (context && !routeLocale) locale = context.profile.locale;
       const input = schema.parse(raw);
       if (options.rateLimit) {

@@ -1,4 +1,5 @@
 import 'server-only';
+import {cache} from 'react';
 import {createClient} from '@/lib/supabase/server';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {ForbiddenError, ReadOnlyError} from '@/lib/errors';
@@ -15,7 +16,7 @@ export type ResolvedEntitlements = DbEntitlements & {
   paymentFailed: boolean;
 };
 
-export async function resolveEntitlements(context: UserContext): Promise<ResolvedEntitlements> {
+export const resolveEntitlements = cache(async (context: UserContext): Promise<ResolvedEntitlements> => {
   const db = await createClient();
   const [{data: rows, error}, {data: subscription}] = await Promise.all([
     db.rpc('current_entitlements', {p_user: context.user.id}),
@@ -25,13 +26,13 @@ export async function resolveEntitlements(context: UserContext): Promise<Resolve
   const value = rows[0];
   return {...value, source: context.profile.plan_override ? 'override' : ['active', 'trialing'].includes(subscription?.status ?? '') ? 'subscription' : value.is_trial ? 'trial' : 'none',
     subscription: subscription ?? null, trialEndsAt: context.profile.trial_ends_at, paymentFailed: subscription?.status === 'past_due'};
-}
+});
 
-export async function resolveOwnerEntitlements(ownerId: string): Promise<DbEntitlements> {
+export const resolveOwnerEntitlements = cache(async (ownerId: string): Promise<DbEntitlements> => {
   const {data, error} = await createAdminClient().rpc('current_entitlements', {p_user: ownerId});
   if (error || !data?.[0]) throw new ForbiddenError();
   return data[0];
-}
+});
 
 export function hasEntitlement(entitlements: DbEntitlements, feature: PlanFeature): boolean {
   const features = entitlements.features;

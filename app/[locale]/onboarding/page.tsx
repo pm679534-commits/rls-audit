@@ -1,6 +1,6 @@
 import {redirect} from 'next/navigation';
 import {getTranslations} from 'next-intl/server';
-import {requireUser} from '@/lib/auth';
+import {requirePageUser} from '@/lib/auth/page';
 import {createClient} from '@/lib/supabase/server';
 import {Link} from '@/i18n/navigation';
 import {SiteForm, FirstScanButton, VerificationControls} from '@/components/sites/site-manager';
@@ -8,7 +8,7 @@ import {getTrialStatus} from '@/lib/auth/trial';
 import {UpgradePrompt} from '@/components/account/trial-banner';
 
 export default async function OnboardingPage() {
-  const context = await requireUser();
+  const context = await requirePageUser();
   const db = await createClient();
   const {data: sites} = await db.from('sites').select('*').eq('owner_id', context.user.id).order('created_at', {ascending: true}).limit(1);
   const site = sites?.[0];

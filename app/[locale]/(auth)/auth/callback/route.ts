@@ -1,8 +1,9 @@
-import {NextResponse, type NextRequest} from 'next/server';
+import {NextResponse, after, type NextRequest} from 'next/server';
 import {createServerClient} from '@supabase/ssr';
 import {getPublicEnv} from '@/lib/env';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {z} from 'zod';
+import {logUnexpectedError} from '@/lib/logger';
 
 const callbackQuery = z.object({
   code: z.string().min(1).max(4096).optional(),
@@ -29,8 +30,14 @@ export async function GET(request: NextRequest, {params}: {params: Promise<{loca
   const {data, error} = await db.auth.exchangeCodeForSession(code);
   if (error) return NextResponse.redirect(new URL(`/${language}/sign-in?error=callback`, base));
   if (data.user?.email_confirmed_at && next === '/onboarding') {
-    await createAdminClient().from('notifications').insert({user_id: data.user.id, type: 'welcome',
-      title_key: 'Notifications.welcomeTitle', body_key: 'Notifications.welcomeBody', data: {eventKey: `welcome:${data.user.id}`}});
+    const userId = data.user.id;
+    after(async () => {
+      try {
+        const {error: insertError} = await createAdminClient().from('notifications').insert({user_id: userId, type: 'welcome',
+          title_key: 'Notifications.welcomeTitle', body_key: 'Notifications.welcomeBody', data: {eventKey: `welcome:${userId}`}});
+        if (insertError && insertError.code !== '23505') throw insertError;
+      } catch (failure) {logUnexpectedError('auth_welcome_notification_failed', failure, {userId});}
+    });
   }
   return response;
 }

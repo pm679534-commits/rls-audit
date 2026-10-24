@@ -8,6 +8,7 @@ import {requireAlerts} from '@/lib/billing/entitlements';
 import {encryptSecret, secureRandomToken} from '@/lib/crypto';
 import {ForbiddenError, NotFoundError, ValidationError} from '@/lib/errors';
 import type {Tables} from '@/types/database';
+import {unreadNotificationCount} from './unread';
 
 type Channel = Tables<'notification_channels'>['type'];
 
@@ -24,13 +25,13 @@ function validateChannelUrl(type: Channel, raw: string): string {
 export async function listNotifications() {
   const context = await requireUser();
   const db = await createClient();
-  const [{data: notifications, error}, {count, error: countError}, {data: channels, error: channelsError}] = await Promise.all([
+  const [{data: notifications, error}, count, {data: channels, error: channelsError}] = await Promise.all([
     db.from('notifications').select('*').eq('user_id', context.user.id).order('created_at', {ascending: false}).limit(100),
-    db.from('notifications').select('id', {count: 'exact', head: true}).eq('user_id', context.user.id).is('read_at', null),
+    unreadNotificationCount(context.user.id),
     db.from('notification_channels').select('id,name,type,site_id,enabled,last_delivered_at,last_error_code,created_at').eq('owner_id', context.user.id).order('created_at', {ascending: false})
   ]);
-  if (error || countError || channelsError) throw new Error('Could not load notifications');
-  return {notifications: notifications ?? [], unread: count ?? 0, channels: channels ?? []};
+  if (error || channelsError) throw new Error('Could not load notifications');
+  return {notifications: notifications ?? [], unread: count, channels: channels ?? []};
 }
 
 export async function markNotificationsRead(ids: string[]): Promise<void> {

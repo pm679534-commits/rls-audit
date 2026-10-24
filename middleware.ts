@@ -46,19 +46,23 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const locale = routing.locales.find((value) => path === `/${value}` || path.startsWith(`/${value}/`)) ?? routing.defaultLocale;
   const isApi = path.startsWith('/api/');
+  const isProtected = path === `/${locale}/dashboard` || path.startsWith(`/${locale}/dashboard/`) ||
+    path === `/${locale}/admin` || path.startsWith(`/${locale}/admin/`) || path === `/${locale}/onboarding`;
+  requestHeaders.set('x-siteguard-path', path);
   let response = isApi ? NextResponse.next({request: {headers: requestHeaders}}) : intlMiddleware(request);
   if (!isApi && !response.headers.has('Location')) {
     const overrides = new Set((response.headers.get('x-middleware-override-headers') ?? '').split(',').filter(Boolean));
     overrides.add('x-nonce');
     overrides.add('content-security-policy');
+    overrides.add('x-siteguard-path');
     response.headers.set('x-middleware-override-headers', [...overrides].join(','));
     response.headers.set('x-middleware-request-x-nonce', nonce);
     response.headers.set('x-middleware-request-content-security-policy', csp);
+    response.headers.set('x-middleware-request-x-siteguard-path', path);
   }
 
-  const needsSession = !isApi || path.startsWith('/api/profile/');
   const refreshedCookies: {name: string; value: string; options: Parameters<NextResponse['cookies']['set']>[2]}[] = [];
-  if (needsSession) {
+  if (isProtected) {
     const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
       cookies: {
         getAll: () => request.cookies.getAll(),
@@ -70,35 +74,14 @@ export async function middleware(request: NextRequest) {
         }
       }
     });
-    if (!isApi && !path.startsWith(`/${locale}/maintenance`) && !path.startsWith(`/${locale}/admin`)) {
-      const {data: maintenance} = await supabase.rpc('maintenance_enabled');
-      if (maintenance || process.env.MAINTENANCE_MODE === 'true') {
-        response = NextResponse.redirect(new URL(`/${locale}/maintenance`, request.url));
-        return securityHeaders(response, nonce, csp);
-      }
-    }
     const {data: {user}} = await supabase.auth.getUser();
-    const isDashboard = path === `/${locale}/dashboard` || path.startsWith(`/${locale}/dashboard/`);
-    const isAdmin = path === `/${locale}/admin` || path.startsWith(`/${locale}/admin/`);
-    const isOnboarding = path === `/${locale}/onboarding`;
-    if (isDashboard || isAdmin || isOnboarding) {
-      if (!user) response = NextResponse.redirect(new URL(`/${locale}/sign-in${path.includes('/dashboard/team/invite') ? `?next=${encodeURIComponent(`${path.slice(locale.length + 1)}${request.nextUrl.search}`)}` : ''}`, request.url));
-      else if (!user.email_confirmed_at) response = NextResponse.redirect(new URL(`/${locale}/verify-email${path.includes('/dashboard/team/invite') ? `?next=${encodeURIComponent(`${path.slice(locale.length + 1)}${request.nextUrl.search}`)}` : ''}`, request.url));
-      else {
-        const {data: profile} = await supabase.from('profiles').select('role,suspended').eq('id', user.id).single();
-        if (!profile) response = NextResponse.redirect(new URL(`/${locale}/not-authorized`, request.url));
-        else if (profile.suspended) response = NextResponse.redirect(new URL(`/${locale}/suspended`, request.url));
-        else if (isAdmin) {
-          const {data: allowed} = await supabase.rpc('is_admin');
-          if (!allowed) response = NextResponse.redirect(new URL(`/${locale}/not-authorized`, request.url));
-        }
-      }
-    }
+    if (!user) response = NextResponse.redirect(new URL(`/${locale}/sign-in${path.includes('/dashboard/team/invite') ? `?next=${encodeURIComponent(`${path.slice(locale.length + 1)}${request.nextUrl.search}`)}` : ''}`, request.url));
+    else if (!user.email_confirmed_at) response = NextResponse.redirect(new URL(`/${locale}/verify-email${path.includes('/dashboard/team/invite') ? `?next=${encodeURIComponent(`${path.slice(locale.length + 1)}${request.nextUrl.search}`)}` : ''}`, request.url));
   }
   for (const cookie of refreshedCookies) response.cookies.set(cookie.name, cookie.value, cookie.options);
   return securityHeaders(response, nonce, csp);
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml)$).*)']
+  matcher: ['/((?!_next/|api/cron/|api/webhooks/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|css|js|map|woff2?)$).*)']
 };

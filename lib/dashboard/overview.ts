@@ -7,9 +7,9 @@ import type {Tables} from '@/types/database';
 
 export async function getOverview() {
   const context = await requireUser();
-  const entitlements = await resolveEntitlements(context);
   const db = await createClient();
-  const [{data: sites, error: siteError}, {data: notifications, error: noticeError}, {data: manualScans, error: countError}] = await Promise.all([
+  const [entitlements, {data: sites, error: siteError}, {data: notifications, error: noticeError}, {data: manualScans, error: countError}] = await Promise.all([
+    resolveEntitlements(context),
     db.from('sites').select('*').order('created_at', {ascending: false}),
     db.from('notifications').select('id,type,title_key,created_at,site_id').eq('user_id', context.user.id).order('created_at', {ascending: false}).limit(5),
     db.rpc('manual_scan_count_this_month', {p_user: context.user.id})
@@ -20,13 +20,16 @@ export async function getOverview() {
     [ownerId, ownerId === context.user.id ? entitlements : await resolveOwnerEntitlements(ownerId)] as const)));
   const historyDays = new Map((sites ?? []).map((site) => [site.id, ownerPlans.get(site.owner_id)?.history_days ?? 30]));
   const oldestCutoff = new Date(Date.now() - Math.max(30, ...historyDays.values()) * 86_400_000).toISOString();
-  const {data: scans, error: scansError} = siteIds.length
-    ? await db.from('scans').select('id,site_id,score,status,kind,created_at,completed_at').in('site_id', siteIds).gte('created_at', oldestCutoff).order('created_at', {ascending: false}).limit(250)
-    : {data: [], error: null};
+  const [scanResult, latestScans] = await Promise.all([
+    siteIds.length
+      ? db.from('scans').select('id,site_id,score,status,kind,created_at,completed_at').in('site_id', siteIds).gte('created_at', oldestCutoff).order('created_at', {ascending: false}).limit(250)
+      : Promise.resolve({data: [], error: null}),
+    Promise.all(siteIds.map(async (siteId) => db.from('scans').select('id').eq('site_id', siteId).eq('status', 'completed')
+      .gte('created_at', new Date(Date.now() - (historyDays.get(siteId) ?? 30) * 86_400_000).toISOString()).order('created_at', {ascending: false}).limit(1).maybeSingle()))
+  ]);
+  const {data: scans, error: scansError} = scanResult;
   if (scansError) throw new Error('Could not load scans');
   const visibleScans = (scans ?? []).filter((scan) => new Date(scan.created_at).getTime() >= Date.now() - (historyDays.get(scan.site_id) ?? 30) * 86_400_000);
-  const latestScans = await Promise.all(siteIds.map(async (siteId) => db.from('scans').select('id').eq('site_id', siteId).eq('status', 'completed')
-    .gte('created_at', new Date(Date.now() - (historyDays.get(siteId) ?? 30) * 86_400_000).toISOString()).order('created_at', {ascending: false}).limit(1).maybeSingle()));
   if (latestScans.some((result) => result.error)) throw new Error('Could not load latest scans');
   const latestIds = latestScans.flatMap((result) => result.data ? [result.data.id] : []);
   const [findings, states, {data: team, error: teamError}] = await Promise.all([

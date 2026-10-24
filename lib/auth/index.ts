@@ -1,5 +1,6 @@
 import 'server-only';
 
+import {cache} from 'react';
 import type {User} from '@supabase/supabase-js';
 import {createClient} from '@/lib/supabase/server';
 import {EmailUnverifiedError, ForbiddenError, NotFoundError, ReadOnlyError, SuspendedError, UnauthenticatedError} from '@/lib/errors';
@@ -11,14 +12,14 @@ export type UserContext = {user: User; profile: Tables<'profiles'>};
 export type Entitlements = Database['public']['Functions']['current_entitlements']['Returns'][number];
 export type TeamRole = Database['public']['Enums']['team_role'];
 
-export async function getSession(): Promise<UserContext | null> {
+export const getSession = cache(async (): Promise<UserContext | null> => {
   const db = await createClient();
   const {data: {user}, error} = await db.auth.getUser();
   if (error || !user) return null;
   const {data: profile, error: profileError} = await db.from('profiles').select('*').eq('id', user.id).single();
   if (profileError || !profile) return null;
   return {user, profile};
-}
+});
 
 export function requireVerifiedEmail(context: UserContext): UserContext {
   if (!context.user.email_confirmed_at) throw new EmailUnverifiedError();
@@ -30,20 +31,20 @@ export function requireActiveAccount(context: UserContext): UserContext {
   return context;
 }
 
-export async function requireUser(): Promise<UserContext> {
+export const requireUser = cache(async (): Promise<UserContext> => {
   const context = await getSession();
   if (!context) throw new UnauthenticatedError();
   return requireActiveAccount(requireVerifiedEmail(context));
-}
+});
 
-export async function requireAdmin(): Promise<UserContext> {
+export const requireAdmin = cache(async (): Promise<UserContext> => {
   const context = await requireUser();
   if (context.profile.role !== 'admin') throw new ForbiddenError();
   const db = await createClient();
   const {data, error} = await db.rpc('is_admin');
   if (error || !data) throw new ForbiddenError();
   return context;
-}
+});
 
 export async function requireTeamRole(teamId: string, roles: readonly TeamRole[] = ['owner', 'member', 'viewer']): Promise<UserContext & {role: TeamRole}> {
   const context = await requireUser();

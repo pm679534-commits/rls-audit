@@ -33,4 +33,4 @@ export const sendContactMessage = createServerAction(schema, async (input, conte
         <Text>{input.subject}</Text><Text style={{whiteSpace: 'pre-wrap'}}>{input.body}</Text></>});
   } catch (error) { logUnexpectedError('contact_notification_failed', error); }
   return {sent: true};
-}, {access: 'public', rateLimit: {name: 'contact', limit: 5, windowSeconds: 3600}});
+}, {access: 'optional', rateLimit: {name: 'contact', limit: 5, windowSeconds: 3600}});
