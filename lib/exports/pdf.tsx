@@ -7,8 +7,11 @@ import type {Locale} from '@/i18n/routing';
 import en from '@/messages/en.json';
 import az from '@/messages/az.json';
 
-Font.register({family: 'Inter', src: join(process.cwd(), 'public', 'fonts', 'inter-latin-ext-wght-normal.woff2')});
-const styles = StyleSheet.create({page: {padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#172a35'},
+Font.register({family: 'InterPDF', fonts: [
+  {src: join(process.cwd(), 'public', 'fonts', 'inter-pdf-regular.woff2'), fontWeight: 400},
+  {src: join(process.cwd(), 'public', 'fonts', 'inter-pdf-bold.woff2'), fontWeight: 700}
+]});
+const styles = StyleSheet.create({page: {padding: 40, fontFamily: 'InterPDF', fontSize: 10, color: '#172a35'},
   header: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24},
   brand: {fontSize: 21, fontWeight: 700}, logo: {width: 90, height: 40, objectFit: 'contain'},
   title: {fontSize: 27, fontWeight: 700, marginBottom: 8}, muted: {color: '#526674', marginBottom: 12},
@@ -16,9 +19,7 @@ const styles = StyleSheet.create({page: {padding: 40, fontFamily: 'Helvetica', f
   finding: {fontSize: 13, fontWeight: 700, marginBottom: 4}, label: {fontWeight: 700, marginTop: 6}});
 
 function PdfText({value, style}: {value: string; style?: TextProps['style']}) {
-  // The bundled extended Latin font supplies Azerbaijani glyphs; Helvetica supplies ASCII.
-  return <Text style={style}>{value.split(/([\u0080-\uFFFF]+)/).filter(Boolean).map((part, index) =>
-    <Text key={index} style={{fontFamily: /^[\x00-\x7F]+$/.test(part) ? 'Helvetica' : 'Inter'}}>{part}</Text>)}</Text>;
+  return <Text style={style}>{value}</Text>;
 }
 
 export async function renderReportPdf(input: {site: Tables<'sites'>; scan: Tables<'scans'>; findings: Tables<'findings'>[];

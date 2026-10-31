@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  serverExternalPackages: ['@react-pdf/renderer', '@react-pdf/pdfkit', 'pdfkit'],
+  outputFileTracingIncludes: {
+    '/api/cron/exports': [
+      './node_modules/pdfkit/js/**/*',
+      './node_modules/@react-pdf/pdfkit/lib/**/*',
+      './public/fonts/inter-pdf-*.woff2'
+    ]
+  },
   experimental: {serverActions: {bodySizeLimit: '6mb'}},
   images: {formats: ['image/avif', 'image/webp']},
   async headers() {

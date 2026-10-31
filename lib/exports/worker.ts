@@ -107,12 +107,13 @@ async function accountFile(job: Tables<'data_exports'>): Promise<{file: Buffer; 
 }
 
 export async function processExports(limit = 1): Promise<{claimed: number; completed: number}> {
-  const client = db();
-  const {data: jobs, error} = await client.rpc('claim_data_exports', {p_limit: limit});
-  if (error || !jobs) throw new Error('Could not claim exports');
-  let completed = 0;
-  for (const job of jobs) {
-    try {
+  try {
+    const client = db();
+    const {data: jobs, error} = await client.rpc('claim_data_exports', {p_limit: limit});
+    if (error || !jobs) throw new Error('Could not claim exports');
+    let completed = 0;
+    for (const job of jobs) {
+      try {
       const {file, mime} = job.scope === 'report' ? await reportFile(job) : await accountFile(job);
       if (file.length > (job.format === 'pdf' ? 20 : 50) * 1024 * 1024) throw new Error('Export exceeds storage limit');
       const bucket = job.format === 'pdf' ? 'report-pdfs' : 'data-exports';
@@ -122,17 +123,24 @@ export async function processExports(limit = 1): Promise<{claimed: number; compl
       const {data: saved, error: saveError} = await client.from('data_exports').update({status: 'completed', storage_path: path, completed_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(), locked_at: null, error_code: null}).eq('id', job.id).eq('status', 'processing').select('id').maybeSingle();
       if (saveError || !saved) {
-        await client.storage.from(bucket).remove([path]);
-        if (saveError) throw saveError;
-        continue;
+        const {error: removeError} = await client.storage.from(bucket).remove([path]);
+        if (removeError) logger.error('export_orphan_cleanup_failed', {attempts: job.attempts});
+        throw saveError ?? new Error('Could not complete export');
       }
       completed++;
-    } catch (failure) {
-      logger.warn('export_failed', {attempts: job.attempts});
-      const status = job.attempts >= 5 ? 'failed' : 'queued';
-      await client.from('data_exports').update({status, locked_at: null, error_code: 'export_failed',
-        available_at: new Date(Date.now() + Math.min(3600, 30 * 2 ** job.attempts) * 1000).toISOString()}).eq('id', job.id).eq('status', 'processing');
+      } catch {
+        const exhausted = job.attempts >= 5;
+        const status = exhausted ? 'failed' : 'queued';
+        logger.warn('export_job_failed', {attempts: job.attempts, status});
+        const delay = Math.min(3600, 30 * 2 ** Math.min(job.attempts, 6));
+        const {data: updated, error: updateError} = await client.from('data_exports').update({status, locked_at: null, error_code: 'export_failed',
+          available_at: new Date(Date.now() + delay * 1000).toISOString()}).eq('id', job.id).eq('status', 'processing').select('id').maybeSingle();
+        if (updateError || !updated) throw new Error('Could not save export failure');
+      }
     }
+    return {claimed: jobs.length, completed};
+  } catch {
+    logger.error('export_worker_failed');
+    throw new Error('Export worker unavailable');
   }
-  return {claimed: jobs.length, completed};
 }
