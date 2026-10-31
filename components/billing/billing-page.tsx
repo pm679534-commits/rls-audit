@@ -18,6 +18,7 @@ function UsageMeter({label, used, limit}: {label: string; used: number; limit: n
 
 export function BillingPage({entitlements, usage, invoices, invoiceError}: {entitlements: ResolvedEntitlements; usage: Usage; invoices: BillingInvoice[]; invoiceError: boolean}) {
   const t = useTranslations('Phase6');
+  const overrideText = useTranslations('AdminPlanNotice');
   const router = useRouter();
   const [period, setPeriod] = useState<BillingPeriod>(entitlements.subscription?.billing_period ?? 'monthly');
   const [pending, startTransition] = useTransition();
@@ -43,7 +44,9 @@ export function BillingPage({entitlements, usage, invoices, invoiceError}: {enti
     {entitlements.is_trial && <div className="rounded-xl border border-primary/30 bg-primary/5 p-5"><strong>{t('trialTitle')}</strong><p className="text-sm">{t('trialEnds', {date: new Date(entitlements.trialEndsAt).toLocaleDateString(locale)})}</p></div>}
     {entitlements.read_only && <div className="rounded-xl border p-5"><strong>{t('readOnlyTitle')}</strong><p className="text-sm text-muted-foreground">{t('readOnlyBody')}</p></div>}
     <section className="rounded-xl border bg-card p-5"><h2 className="font-semibold">{t('currentPlan')}</h2><p className="mt-1 text-2xl font-semibold">{current ? PLANS[current].name : t('noPlan')}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{subscription ? `${t(`status.${subscription.status}`)} · ${t(`period.${subscription.billing_period}`)}` : entitlements.is_trial ? t('trialStatus') : t('noSubscription')}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{entitlements.source === 'override' ? overrideText('title') : entitlements.source === 'subscription' && subscription ? `${t(`status.${subscription.status}`)} · ${t(`period.${subscription.billing_period}`)}` : entitlements.is_trial ? t('trialStatus') : t('noSubscription')}</p>
+      {entitlements.source === 'override' && <p className="mt-1 text-sm text-muted-foreground">{entitlements.overrideExpiresAt ? overrideText('expires', {date: new Date(entitlements.overrideExpiresAt).toLocaleDateString(locale)}) : overrideText('noExpiry')}</p>}
+      {entitlements.source === 'override' && subscription && <p className="mt-3 text-sm text-muted-foreground">{overrideText('separateSubscription', {plan: PLANS[subscription.plan_id].name, status: t(`status.${subscription.status}`)})}</p>}
       {subscription?.billing_country && <p className="mt-1 text-sm text-muted-foreground">{t('country')}: {subscription.billing_country}</p>}
       {subscription?.current_period_end && <p className="mt-1 text-sm text-muted-foreground">{t('periodEnd', {date: new Date(subscription.current_period_end).toLocaleDateString(locale)})}</p>}
       {subscription?.cancel_at_period_end && <p className="mt-2 text-sm font-medium">{t('cancellationScheduled')}</p>}

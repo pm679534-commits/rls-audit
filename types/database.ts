@@ -38,7 +38,7 @@ export type Database = {
       profiles: Table<{
         id: string; email: string; display_name: string | null; avatar_path: string | null;
         role: UserRole; locale: 'en' | 'az'; trial_started_at: string; trial_ends_at: string;
-        suspended: boolean; plan_override: PlanId | null; notification_preferences: Json;
+        suspended: boolean; plan_override: PlanId | null; plan_override_expires_at: string | null; notification_preferences: Json;
         email_unsubscribed_at: string | null; created_at: string; updated_at: string;
       }, 'id' | 'email'>;
       teams: Table<{
@@ -217,6 +217,13 @@ export type Database = {
         site_limit: number | null; manual_scans_per_month: number | null;
         history_days: number | null; team_member_limit: number | null;
         scan_interval_hours: number | null; features: Json | null;
+      }[]};
+      admin_user_directory: {Args: {p_search: string; p_plan: string; p_status: string; p_role: string; p_sort: string; p_desc: boolean; p_offset: number}; Returns: {
+        id: string; email: string; display_name: string | null; role: string; locale: string;
+        effective_plan: PlanId | null; plan_source: 'override' | 'subscription' | 'trial' | 'none';
+        trial_ends_at: string; sites_used: number; site_limit: number; created_at: string;
+        last_sign_in_at: string | null; status: string; plan_override: PlanId | null;
+        plan_override_expires_at: string | null;
       }[]};
       active_site_count: {Args: {p_user: string}; Returns: number};
       manual_scan_count_this_month: {Args: {p_user: string}; Returns: number};

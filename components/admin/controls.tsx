@@ -7,23 +7,27 @@ import {adminMutate} from '@/lib/admin/actions';
 type Value = string | number | boolean | null | undefined;
 type Field = {name: string; label: string; type?: 'text' | 'number' | 'textarea' | 'select' | 'datetime-local' | 'checkbox' | 'url'; value?: Value; options?: {value: string; label: string}[]; required?: boolean; min?: number; max?: number};
 
-export function AdminActionButton({payload, label, confirmMessage, destructive = false}: {payload: Record<string, unknown>; label: string; confirmMessage?: string; destructive?: boolean}) {
+export function AdminActionButton({payload, label, confirmMessage, reasonLabel, destructive = false}: {payload: Record<string, unknown>; label: string; confirmMessage?: string; reasonLabel?: string; destructive?: boolean}) {
   const [pending, start] = useTransition();
   const [message, setMessage] = useState('');
   const router = useRouter();
   return <span className="inline-flex flex-col gap-1"><button type="button" disabled={pending} onClick={() => {
+    const reason = reasonLabel ? window.prompt(reasonLabel)?.trim() : undefined;
+    if (reasonLabel && (!reason || reason.length < 5)) return;
     const confirmation = confirmMessage ? window.prompt(confirmMessage) : undefined;
     if (confirmMessage && confirmation !== 'DELETE') return;
-    start(async () => {const result = await adminMutate({...payload, ...(confirmMessage ? {confirmation} : {})}); setMessage(result.ok ? '' : result.error.message); if (result.ok) router.refresh();});
+    if (reasonLabel && !window.confirm(label)) return;
+    start(async () => {const result = await adminMutate({...payload, ...(confirmMessage ? {confirmation} : {}), ...(reasonLabel ? {reason} : {})}); setMessage(result.ok ? '' : result.error.message); if (result.ok) router.refresh();});
   }} className={`rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50 ${destructive ? 'border-destructive text-destructive hover:bg-destructive/10' : 'hover:bg-accent'}`}>{pending ? '…' : label}</button>{message && <span role="alert" className="max-w-56 text-xs text-destructive">{message}</span>}</span>;
 }
 
-export function AdminForm({kind, fixed = {}, fields, submitLabel, successLabel}: {kind: string; fixed?: Record<string, unknown>; fields: Field[]; submitLabel: string; successLabel: string}) {
+export function AdminForm({kind, fixed = {}, fields, submitLabel, successLabel, confirmMessage}: {kind: string; fixed?: Record<string, unknown>; fields: Field[]; submitLabel: string; successLabel: string; confirmMessage?: string}) {
   const [pending, start] = useTransition();
   const [message, setMessage] = useState('');
   const router = useRouter();
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (confirmMessage && !window.confirm(confirmMessage)) return;
     const form = event.currentTarget;
     const data = new FormData(form);
     const values: Record<string, unknown> = {...fixed, kind};

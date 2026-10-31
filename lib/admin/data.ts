@@ -24,6 +24,15 @@ export async function adminOverview() {
 }
 
 export const adminFilterSchema = z.object({q: z.string().trim().max(120).default(''), status: z.string().max(32).default('all'), page: z.coerce.number().int().min(1).max(10000).default(1)});
+export const userFilterSchema = z.object({
+  q: z.string().trim().max(120).default(''),
+  plan: z.enum(['all','none','starter','pro','agency']).default('all'),
+  status: z.enum(['all','trial','active','past_due','canceled','suspended']).default('all'),
+  role: z.enum(['all','user','admin']).default('all'),
+  sort: z.enum(['email','effective_plan','trial_ends_at','sites_used','created_at','last_sign_in_at','status','role']).default('created_at'),
+  direction: z.enum(['asc','desc']).default('desc'),
+  page: z.coerce.number().int().min(1).max(10000).default(1)
+});
 export type AdminFilter = z.infer<typeof adminFilterSchema>;
 const size = 25;
 const pageRange = (page: number) => [(page - 1) * size, page * size - 1] as const;
@@ -31,32 +40,63 @@ function check(error: {message: string} | null) { if (error) throw new Error('Co
 
 export async function adminUsers(raw: unknown) {
   await requireAdmin();
-  const filter = adminFilterSchema.parse(raw);
-  let query = createAdminClient().from('profiles').select('id,email,display_name,role,locale,trial_started_at,trial_ends_at,suspended,plan_override,created_at', {count: 'exact'});
-  if (filter.q) {const q = filter.q.replace(/[^\p{L}\p{N}\s@._+-]/gu, ''); query = query.or(`email.ilike.%${q}%,display_name.ilike.%${q}%`);}
-  if (filter.status === 'suspended') query = query.eq('suspended', true);
-  else if (filter.status === 'trial') query = query.gt('trial_ends_at', new Date().toISOString()).is('plan_override', null);
-  else if (filter.status === 'admin') query = query.eq('role', 'admin');
-  const {data, count, error} = await query.order('created_at', {ascending: false}).range(...pageRange(filter.page));
-  check(error);
-  return {rows: data ?? [], count: count ?? 0, filter};
+  const filter = userFilterSchema.parse(raw);
+  const db = createAdminClient();
+  const {data, error} = await db.rpc('admin_user_directory', {p_search: filter.q, p_plan: filter.plan,
+    p_status: filter.status, p_role: filter.role, p_sort: filter.sort, p_desc: filter.direction === 'desc', p_offset: (filter.page - 1) * size});
+  if (!error) return {rows: (data ?? []).slice(0, size), hasNext: (data ?? []).length > size, filter};
+  if (error.code !== 'PGRST202' && error.code !== '42883') check(error);
+  // The directory RPC becomes available when the manually applied migration lands.
+  let legacy = db.from('profiles').select('id,email,display_name,role,locale,trial_ends_at,suspended,plan_override,created_at');
+  if (filter.q) legacy = legacy.or(`email.ilike.%${filter.q.replace(/[^\p{L}\p{N}\s@._+-]/gu, '')}%,display_name.ilike.%${filter.q.replace(/[^\p{L}\p{N}\s@._+-]/gu, '')}%`);
+  if (filter.role !== 'all') legacy = legacy.eq('role', filter.role);
+  if (filter.status === 'suspended') legacy = legacy.eq('suspended', true);
+  const fallback = await legacy.order('created_at', {ascending: filter.direction === 'asc'}).range((filter.page - 1) * size, filter.page * size);
+  check(fallback.error);
+  const rows = await Promise.all((fallback.data ?? []).map(async (profile) => {
+    const [{data: ent}, {data: sub}, {data: sites}] = await Promise.all([
+      db.rpc('current_entitlements', {p_user: profile.id}),
+      db.from('subscriptions').select('plan_id,status').eq('owner_id', profile.id).maybeSingle(),
+      db.from('sites').select('id').eq('owner_id', profile.id).eq('status', 'active').limit(26)
+    ]);
+    const effective = ent?.[0]?.effective_plan ?? null;
+    const status = profile.suspended ? 'suspended' : sub?.status === 'past_due' ? 'past_due' : sub?.status === 'canceled' ? 'canceled' : sub?.status === 'active' || sub?.status === 'trialing' ? 'active' : new Date(profile.trial_ends_at) > new Date() ? 'trial' : 'canceled';
+    const source = profile.plan_override && effective === profile.plan_override ? 'override' : sub && effective === sub.plan_id ? 'subscription' : status === 'trial' ? 'trial' : 'none';
+    return {...profile, effective_plan: effective, plan_source: source as 'override'|'subscription'|'trial'|'none', status,
+      sites_used: sites?.length ?? 0, site_limit: ent?.[0]?.site_limit ?? 0, last_sign_in_at: null, plan_override_expires_at: null};
+  }));
+  return {rows: rows.slice(0, size), hasNext: rows.length > size, filter};
 }
 
 export async function adminUser(id: string) {
   await requireAdmin();
+  z.string().uuid().parse(id);
   const db = createAdminClient();
-  const [profile, authUser, subscription, sites] = await Promise.all([
+  const [profile, authUser, subscription, sites, entitlements, activity] = await Promise.all([
     db.from('profiles').select('*').eq('id', id).maybeSingle(),
     db.auth.admin.getUserById(id),
     db.from('subscriptions').select('*').eq('owner_id', id).maybeSingle(),
-    db.from('sites').select('id,name,domain,status,verified_at,last_score,created_at').eq('owner_id', id).order('created_at', {ascending: false}).limit(100)
+    db.from('sites').select('id,name,domain,status,verified_at,last_score,created_at').eq('owner_id', id).order('created_at', {ascending: false}).limit(100),
+    db.rpc('current_entitlements', {p_user: id}),
+    db.from('admin_audit_log').select('id,actor_id,action,details,created_at').eq('target_id', id).order('created_at', {ascending: false}).limit(30)
   ]);
-  [profile,authUser,subscription,sites].forEach((r) => check(r.error));
+  [profile,authUser,subscription,sites,entitlements,activity].forEach((r) => check(r.error));
+  const history: {id: number; actor_id: string | null; action: string; details: import('@/types/database').Json; ip_address: string | null; created_at: string}[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const result = await db.from('admin_audit_log').select('id,actor_id,action,details,ip_address,created_at')
+      .eq('target_table', 'profiles').eq('target_id', id).in('action', ['trial','plan','suspend','verify_email','delete_user'])
+      .order('created_at', {ascending: false}).order('id', {ascending: false}).range(offset, offset + 499);
+    check(result.error);
+    history.push(...(result.data ?? []));
+    if (!result.data || result.data.length < 500) break;
+  }
   const siteIds = (sites.data ?? []).map((site) => site.id);
   const scans = siteIds.length ? await db.from('scans').select('id,site_id,status,kind,score,created_at,failure_code').in('site_id', siteIds).order('created_at', {ascending: false}).limit(20)
     : {data: [], error: null};
   check(scans.error);
   return {profile: profile.data, emailConfirmedAt: authUser.data.user?.email_confirmed_at ?? null,
+    lastSignInAt: authUser.data.user?.last_sign_in_at ?? null, entitlements: entitlements.data?.[0] ?? null,
+    history, activity: activity.data ?? [],
     subscription: subscription.data, sites: sites.data ?? [], scans: scans.data ?? []};
 }
 

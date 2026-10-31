@@ -1,5 +1,4 @@
 import 'server-only';
-import {cache} from 'react';
 import {createClient} from '@/lib/supabase/server';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {ForbiddenError, ReadOnlyError} from '@/lib/errors';
@@ -13,10 +12,11 @@ export type ResolvedEntitlements = DbEntitlements & {
   source: 'override' | 'subscription' | 'trial' | 'none';
   subscription: Tables<'subscriptions'> | null;
   trialEndsAt: string;
+  overrideExpiresAt: string | null;
   paymentFailed: boolean;
 };
 
-export const resolveEntitlements = cache(async (context: UserContext): Promise<ResolvedEntitlements> => {
+export async function resolveEntitlements(context: UserContext): Promise<ResolvedEntitlements> {
   const db = await createClient();
   const [{data: rows, error}, {data: subscription}] = await Promise.all([
     db.rpc('current_entitlements', {p_user: context.user.id}),
@@ -24,15 +24,18 @@ export const resolveEntitlements = cache(async (context: UserContext): Promise<R
   ]);
   if (error || !rows?.[0]) throw new ForbiddenError();
   const value = rows[0];
-  return {...value, source: context.profile.plan_override ? 'override' : ['active', 'trialing'].includes(subscription?.status ?? '') ? 'subscription' : value.is_trial ? 'trial' : 'none',
-    subscription: subscription ?? null, trialEndsAt: context.profile.trial_ends_at, paymentFailed: subscription?.status === 'past_due'};
-});
+  const override = context.profile.plan_override;
+  const validOverride = override && (!context.profile.plan_override_expires_at || Date.parse(context.profile.plan_override_expires_at) > Date.now());
+  return {...value, source: validOverride && value.effective_plan === override ? 'override' : ['active', 'trialing'].includes(subscription?.status ?? '') && value.effective_plan === subscription?.plan_id ? 'subscription' : value.is_trial ? 'trial' : 'none',
+    subscription: subscription ?? null, trialEndsAt: context.profile.trial_ends_at, paymentFailed: subscription?.status === 'past_due',
+    overrideExpiresAt: validOverride ? context.profile.plan_override_expires_at : null};
+}
 
-export const resolveOwnerEntitlements = cache(async (ownerId: string): Promise<DbEntitlements> => {
+export async function resolveOwnerEntitlements(ownerId: string): Promise<DbEntitlements> {
   const {data, error} = await createAdminClient().rpc('current_entitlements', {p_user: ownerId});
   if (error || !data?.[0]) throw new ForbiddenError();
   return data[0];
-});
+}
 
 export function hasEntitlement(entitlements: DbEntitlements, feature: PlanFeature): boolean {
   const features = entitlements.features;

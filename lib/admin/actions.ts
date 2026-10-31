@@ -12,16 +12,19 @@ import {removeStoredFiles} from '@/lib/account';
 import {paddleClient} from '@/lib/billing/paddle';
 import {syncSubscription, notifyPaymentFailed} from '@/lib/billing/sync';
 import {trustedClientIp} from '@/lib/rate-limit';
+import {revalidatePath} from 'next/cache';
+import type {Json} from '@/types/database';
 
 const id = z.string().uuid();
 const text = z.string().trim().min(1).max(10000);
 const url = z.union([z.literal(''), z.string().url().refine((value) => new URL(value).protocol === 'https:')]);
+const reason = z.string().trim().min(5).max(500);
 const inputSchema = z.discriminatedUnion('kind', [
-  z.object({kind: z.literal('trial'), id, mode: z.enum(['extend','end']), days: z.coerce.number().int().min(1).max(365).optional()}),
-  z.object({kind: z.literal('plan'), id, plan: z.enum(['none','starter','pro','agency'])}),
-  z.object({kind: z.literal('suspend'), id, suspended: z.boolean()}),
-  z.object({kind: z.literal('verify_email'), id}),
-  z.object({kind: z.literal('delete_user'), id, confirmation: z.literal('DELETE')}),
+  z.object({kind: z.literal('trial'), id, mode: z.enum(['extend','end']), days: z.coerce.number().int().min(1).max(365).optional(), reason}),
+  z.object({kind: z.literal('plan'), id, plan: z.enum(['none','starter','pro','agency']), expiresAt: z.union([z.literal(''), z.string().datetime({offset: true})]).default(''), reason}),
+  z.object({kind: z.literal('suspend'), id, suspended: z.boolean(), reason}),
+  z.object({kind: z.literal('verify_email'), id, reason}),
+  z.object({kind: z.literal('delete_user'), id, confirmation: z.literal('DELETE'), reason}),
   z.object({kind: z.literal('replay_event'), id}),
   z.object({kind: z.literal('requeue_scan'), id}),
   z.object({kind: z.literal('cancel_scan'), id}),
@@ -40,7 +43,7 @@ const inputSchema = z.discriminatedUnion('kind', [
 ]);
 type Input = z.infer<typeof inputSchema>;
 
-async function audit(context: UserContext, input: Input, targetTable: string, targetId: string | null, details: Record<string, string | number | boolean | null>, operation: () => Promise<void>) {
+async function audit(context: UserContext, input: Input, targetTable: string, targetId: string | null, details: Record<string, Json>, operation: () => Promise<void>) {
   const requestHeaders = await headers();
   const ip = trustedClientIp(requestHeaders);
   const db = createAdminClient();
@@ -99,13 +102,29 @@ async function mutate(input: Input, context: UserContext) {
     : input.kind.startsWith('blocked_') ? 'blocked_domains' : input.kind === 'inbox_update' ? input.inbox
     : input.kind.startsWith('announcement_') ? 'announcements' : input.kind.startsWith('changelog_') ? 'changelog_entries'
     : input.kind === 'flag' ? 'feature_flags' : 'app_settings';
-  const details: Record<string, string | number | boolean | null> = {};
+  const details: Record<string, Json> = {};
   if (input.kind === 'trial') {details.mode = input.mode; details.days = input.days ?? null;}
   if (input.kind === 'plan') details.plan = input.plan;
   if (input.kind === 'suspend') details.suspended = input.suspended;
   if (input.kind === 'flag' || input.kind === 'maintenance') details.enabled = input.enabled;
   if (input.kind === 'setting') details.value = input.value;
   if (input.kind === 'inbox_update') details.status = input.status;
+  if (['trial','plan','suspend','verify_email','delete_user'].includes(input.kind) && 'id' in input && typeof input.id === 'string') {
+    const {data: prior, error: priorError} = await db.from('profiles').select('*').eq('id', input.id).maybeSingle();
+    if (priorError || !prior) throw new NotFoundError();
+    if ((input.kind === 'suspend' || input.kind === 'delete_user') && prior.role === 'admin') throw new ConflictError();
+    details.reason = 'reason' in input ? input.reason : null;
+    details.before = {trialEndsAt: prior.trial_ends_at, planOverride: prior.plan_override, expiresAt: prior.plan_override_expires_at, suspended: prior.suspended};
+    if (input.kind === 'verify_email') {
+      const {data: authUser, error: authError} = await db.auth.admin.getUserById(input.id);
+      if (authError || !authUser.user) throw new NotFoundError();
+      details.before = {...details.before as object, emailVerified: !!authUser.user.email_confirmed_at};
+    }
+    details.after = input.kind === 'plan' ? {...details.before as object, planOverride: input.plan === 'none' ? null : input.plan, expiresAt: input.expiresAt || null}
+      : input.kind === 'trial' ? {...details.before as object, trialEndsAt: new Date(input.mode === 'end' ? Date.now() : Math.max(Date.now(), Date.parse(prior.trial_ends_at)) + (input.days ?? 3) * 86_400_000).toISOString()}
+      : input.kind === 'suspend' ? {...details.before as object, suspended: input.suspended}
+      : input.kind === 'delete_user' ? {...details.before as object, deleted: true} : {...details.before as object, emailVerified: true};
+  }
   await audit(context, input, table, target, details, async () => {
     if (input.kind === 'trial') {
       const {data: profile} = await db.from('profiles').select('trial_ends_at').eq('id', input.id).maybeSingle();
@@ -113,7 +132,14 @@ async function mutate(input: Input, context: UserContext) {
       const end = input.mode === 'end' ? new Date() : new Date(Math.max(Date.now(), new Date(profile.trial_ends_at).getTime()) + (input.days ?? 3) * 86_400_000);
       const {data,error} = await db.from('profiles').update({trial_ends_at: end.toISOString()}).eq('id', input.id).select('id').maybeSingle(); if (error || !data) throw new NotFoundError();
     } else if (input.kind === 'plan') {
-      const {data,error} = await db.from('profiles').update({plan_override: input.plan === 'none' ? null : input.plan}).eq('id', input.id).select('id').maybeSingle(); if (error || !data) throw new NotFoundError();
+      if (input.plan !== 'none' && input.expiresAt && Date.parse(input.expiresAt) <= Date.now()) throw new ValidationError();
+      const record = {plan_override: input.plan === 'none' ? null : input.plan,
+        plan_override_expires_at: input.plan === 'none' ? null : input.expiresAt || null};
+      let result = await db.from('profiles').update(record).eq('id', input.id).select('id').maybeSingle();
+      if (result.error && !input.expiresAt && ['42703','PGRST204'].includes(result.error.code)) {
+        result = await db.from('profiles').update({plan_override: record.plan_override}).eq('id', input.id).select('id').maybeSingle();
+      }
+      if (result.error || !result.data) throw new NotFoundError();
     } else if (input.kind === 'suspend') {
       if (input.id === context.user.id && input.suspended) throw new ConflictError();
       const {data,error} = await db.from('profiles').update({suspended: input.suspended}).eq('id', input.id).select('id').maybeSingle(); if (error || !data) throw new NotFoundError();
@@ -172,6 +198,12 @@ async function mutate(input: Input, context: UserContext) {
       const {data,error} = await db.from('app_settings').update({value: input.value, updated_by: context.user.id}).eq('key', input.key).select('key').maybeSingle(); if (error || !data) throw new NotFoundError();
     }
   });
+  if ('id' in input && ['trial','plan','suspend','verify_email','delete_user'].includes(input.kind)) {
+    revalidatePath('/[locale]/dashboard', 'page');
+    revalidatePath('/[locale]/dashboard/billing', 'page');
+    revalidatePath('/[locale]/admin/users', 'page');
+    revalidatePath('/[locale]/admin/users/[userId]', 'page');
+  }
   return {saved: true};
 }
 
