@@ -6,7 +6,7 @@ import {BRAND_NAME, getSiteUrl} from '@/lib/config';
 import {getPublicEnv} from '@/lib/env';
 import {Link} from '@/i18n/navigation';
 import {Button} from '@/components/ui/button';
-import {PassiveCheck} from '@/components/marketing/passive-check';
+import {PassiveCheckLazy as PassiveCheck} from '@/components/marketing/passive-check-lazy';
 import {PricingTable} from '@/components/marketing/pricing-table';
 import {marketingMetadata} from '@/lib/marketing/seo';
 import {PLANS} from '@/lib/plans';

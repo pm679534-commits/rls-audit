@@ -3,7 +3,7 @@ import {getTranslations} from 'next-intl/server';
 import {createClient} from '@/lib/supabase/server';
 import {requireSiteAccess, requireUser} from '@/lib/auth';
 import {SiteForm, SiteControls, VerificationControls, FirstScanButton} from '@/components/sites/site-manager';
-import {ScoreChart} from '@/components/dashboard/score-chart';
+import {ScoreChartLazy as ScoreChart} from '@/components/dashboard/score-chart-lazy';
 import {FindingsTable} from '@/components/dashboard/findings-table';
 import {ScanTimeline} from '@/components/dashboard/scan-timeline';
 import {SiteScanSettings} from '@/components/dashboard/site-scan-settings';
@@ -30,7 +30,7 @@ export default async function SiteDetailPage({params, searchParams}: {params: Pr
   const [{data: verifications}, {data: scans, count: scanCount, error: scansError}, {data: latest, error: latestError},
     {data: active, error: activeError}, {data: scoreScans, error: scoreError}, presence] = await Promise.all([
     db.from('site_verifications').select('*').eq('site_id', site.id).eq('status', 'pending').order('created_at', {ascending: false}).limit(1),
-    db.from('scans').select('id,status,score,created_at,completed_at,kind,summary', {count: 'exact'}).eq('site_id', site.id).gte('created_at', cutoff).order('created_at', {ascending: false}).range((scanPage - 1) * pageSize, scanPage * pageSize - 1),
+    db.from('scans').select('id,status,score,created_at,completed_at,kind,summary', {count: 'planned'}).eq('site_id', site.id).gte('created_at', cutoff).order('created_at', {ascending: false}).range((scanPage - 1) * pageSize, scanPage * pageSize - 1),
     db.from('scans').select('id,status,score,created_at,completed_at,kind,summary').eq('site_id', site.id).eq('status', 'completed').gte('created_at', cutoff).order('created_at', {ascending: false}).limit(1).maybeSingle(),
     db.from('scans').select('id,status,score,created_at,completed_at,kind,summary').eq('site_id', site.id).in('status', ['queued', 'running']).gte('created_at', cutoff).order('created_at', {ascending: false}).limit(1).maybeSingle(),
     db.from('scans').select('score,created_at,completed_at').eq('site_id', site.id).eq('status', 'completed').gte('created_at', cutoff).order('created_at', {ascending: false}).limit(60),

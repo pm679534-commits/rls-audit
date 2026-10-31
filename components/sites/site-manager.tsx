@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, type FormEvent} from 'react';
+import {useEffect, useState, useTransition, type FormEvent} from 'react';
 import {useLocale, useTranslations} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import {Button} from '@/components/ui/button';
@@ -27,7 +27,7 @@ export function SiteForm({site}: {site?: Tables<'sites'>}) {
   }
   return <form onSubmit={submit} className="space-y-4 rounded-xl border bg-card p-5">
     <div className="space-y-2"><Label htmlFor="site-name">{t('name')}</Label><Input id="site-name" name="name" defaultValue={site?.name} maxLength={120} required /></div>
-    <div className="space-y-2"><Label htmlFor="site-url">{t('url')}</Label><Input id="site-url" name="url" type="url" defaultValue={site?.normalized_url} placeholder="https://example.com" required /></div>
+    <div className="space-y-2"><Label htmlFor="site-url">{t('url')}</Label><Input id="site-url" name="url" type="url" inputMode="url" autoComplete="url" defaultValue={site?.normalized_url} placeholder="https://example.com" required /></div>
     {site && <p className="text-xs text-muted-foreground">{t('urlChangeWarning')}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     <Button disabled={busy} type="submit">{busy ? t('working') : site ? t('save') : t('add')}</Button>
@@ -85,11 +85,17 @@ export function SiteControls({site}: {site: Tables<'sites'>}) {
   const [error, setError] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
-  const pause = async () => {
-    setBusy(true);
-    const result = await pauseSiteAction({siteId: site.id, paused: site.status !== 'paused'});
-    setBusy(false);
-    if (!result.ok) setError(result.error.message); else router.refresh();
+  const [pending, startTransition] = useTransition();
+  const [paused, setPaused] = useState(site.status === 'paused');
+  useEffect(() => setPaused(site.status === 'paused'), [site.status]);
+  const pause = () => {
+    const next = !paused;
+    setPaused(next); setError('');
+    startTransition(async () => {
+      const result = await pauseSiteAction({siteId: site.id, paused: next});
+      if (!result.ok) {setPaused(!next); setError(result.error.message);}
+      else router.refresh();
+    });
   };
   const remove = async () => {
     setBusy(true);
@@ -98,7 +104,7 @@ export function SiteControls({site}: {site: Tables<'sites'>}) {
     if (!result.ok) setError(result.error.message); else {router.push(`/${locale}/dashboard/sites`); router.refresh();}
   };
   return <section className="space-y-4 rounded-xl border bg-card p-5"><h2 className="text-lg font-semibold">{t('management')}</h2>
-    {site.paused_reason !== 'plan_limit' && <Button type="button" variant="outline" disabled={busy} onClick={pause}>{site.status === 'paused' ? t('resume') : t('pause')}</Button>}
+    {site.paused_reason !== 'plan_limit' && <Button type="button" variant="outline" disabled={busy || pending} onClick={pause}>{paused ? t('resume') : t('pause')}</Button>}
     <div className="space-y-2 border-t pt-4"><Label htmlFor="delete-site">{t('deleteConfirm')}</Label><Input id="delete-site" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /><Button type="button" variant="destructive" disabled={busy || confirmation !== 'DELETE'} onClick={remove}>{t('delete')}</Button></div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
   </section>;
@@ -108,17 +114,17 @@ export function FirstScanButton({siteId, kind = 'manual'}: {siteId: string; kind
   const t = useTranslations('Phase5.sites');
   const locale = useLocale();
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState('');
-  const start = async () => {
-    setBusy(true); setMessage('');
-    const result = await startScanAction({siteId, kind, idempotencyKey: crypto.randomUUID()});
-    setBusy(false);
-    if (!result.ok) {
-      setMessage(result.error.code === 'SCAN_IN_PROGRESS' ? t('scanInProgress') : result.error.message);
-      if (result.error.code === 'SCAN_IN_PROGRESS') {router.push(`/${locale}/dashboard/sites/${siteId}`); router.refresh();}
-    }
-    else {setMessage(t('scanQueued')); router.refresh();}
+  const start = () => {
+    setMessage(t('working'));
+    startTransition(async () => {
+      const result = await startScanAction({siteId, kind, idempotencyKey: crypto.randomUUID()});
+      if (!result.ok) {
+        setMessage(result.error.code === 'SCAN_IN_PROGRESS' ? t('scanInProgress') : result.error.message);
+        if (result.error.code === 'SCAN_IN_PROGRESS') {router.push(`/${locale}/dashboard/sites/${siteId}`); router.refresh();}
+      } else {setMessage(t('scanQueued')); router.refresh();}
+    });
   };
-  return <div><Button type="button" disabled={busy} onClick={start}>{busy ? t('working') : t('startScan')}</Button>{message && <p role="status" className="mt-2 text-sm">{message}</p>}</div>;
+  return <div><Button type="button" disabled={pending} onClick={start}>{pending ? t('working') : t('startScan')}</Button>{message && <p role="status" className="mt-2 text-sm">{message}</p>}</div>;
 }

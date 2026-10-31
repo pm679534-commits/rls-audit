@@ -98,14 +98,15 @@ export const reportExportQueue: ReportExportQueue = {
   }
 };
 
-export async function listReports() {
+export async function listReports(page = 1) {
   const context = await requireUser();
   const db = await createClient();
+  const offset = (Math.max(1, Math.min(page, 10000)) - 1) * 25;
   const [{data: sites, error: sitesError}, {data: links, error: linksError}, {data: exports, error: exportsError}] = await Promise.all([
-    db.from('sites').select('id,name,domain,owner_id,last_score').order('name'),
-    db.from('share_links').select('id,site_id,scan_id,created_at,expires_at,revoked_at,last_accessed_at').order('created_at', {ascending: false}).limit(100),
-    db.from('data_exports').select('*').eq('owner_id', context.user.id).eq('scope', 'report').order('created_at', {ascending: false}).limit(100)
+    db.from('sites').select('id,name,domain,owner_id,last_score').order('name').limit(100),
+    db.from('share_links').select('id,site_id,scan_id,created_at,expires_at,revoked_at,last_accessed_at').order('created_at', {ascending: false}).range(offset, offset + 25),
+    db.from('data_exports').select('id,format,status,created_at,storage_path').eq('owner_id', context.user.id).eq('scope', 'report').order('created_at', {ascending: false}).range(offset, offset + 25)
   ]);
   if (sitesError || linksError || exportsError) throw new Error('Could not load reports');
-  return {sites: sites ?? [], links: links ?? [], exports: exports ?? []};
+  return {sites: sites ?? [], links: (links ?? []).slice(0, 25), exports: (exports ?? []).slice(0, 25), hasNext: (links?.length ?? 0) > 25 || (exports?.length ?? 0) > 25};
 }

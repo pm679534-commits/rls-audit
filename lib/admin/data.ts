@@ -104,12 +104,12 @@ export async function adminBilling(raw: unknown) {
   await requireAdmin();
   const f = adminFilterSchema.extend({eventPage: z.coerce.number().int().min(1).max(10000).default(1)}).parse(raw);
   const db = createAdminClient();
-  let subscriptions = db.from('subscriptions').select('id,owner_id,plan_id,status,billing_period,paddle_subscription_id,paddle_customer_id,billing_country,current_period_end,cancel_at_period_end,created_at', {count: 'exact'});
+  let subscriptions = db.from('subscriptions').select('id,owner_id,plan_id,status,billing_period,paddle_subscription_id,paddle_customer_id,billing_country,current_period_end,cancel_at_period_end,created_at', {count: 'planned'});
   if (f.status !== 'all' && ['active','trialing','past_due','paused','canceled'].includes(f.status)) subscriptions = subscriptions.eq('status', f.status as Tables<'subscriptions'>['status']);
   if (f.q) {const q = f.q.replace(/[^a-zA-Z0-9_-]/g, ''); subscriptions = subscriptions.or(`paddle_subscription_id.ilike.%${q}%,paddle_customer_id.ilike.%${q}%`);}
   const [subs, events] = await Promise.all([
     subscriptions.order('created_at', {ascending: false}).range(...pageRange(f.page)),
-    db.from('billing_events').select('id,event_type,provider_event_id,owner_id,processing_error,processed_at,created_at,payload', {count: 'exact'}).order('created_at', {ascending: false}).range(...pageRange(f.eventPage))
+    db.from('billing_events').select('id,event_type,provider_event_id,owner_id,processing_error,processed_at,created_at', {count: 'planned'}).order('created_at', {ascending: false}).range(...pageRange(f.eventPage))
   ]);
   check(subs.error); check(events.error);
   return {subscriptions: subs.data ?? [], count: subs.count ?? 0, events: events.data ?? [], eventCount: events.count ?? 0, filter: f};
@@ -118,7 +118,7 @@ export async function adminBilling(raw: unknown) {
 export async function adminSites(raw: unknown) {
   await requireAdmin();
   const f = adminFilterSchema.parse(raw);
-  let query = createAdminClient().from('sites').select('id,owner_id,name,domain,status,verified_at,last_score,next_scan_at,created_at', {count: 'exact'});
+  let query = createAdminClient().from('sites').select('id,owner_id,name,domain,status,verified_at,last_score,next_scan_at,created_at', {count: 'planned'});
   if (f.q) {const q = f.q.replace(/[^\p{L}\p{N}\s._-]/gu, ''); query = query.or(`name.ilike.%${q}%,domain.ilike.%${q}%`);}
   if (f.status === 'active' || f.status === 'paused') query = query.eq('status', f.status);
   const {data,count,error} = await query.order('created_at', {ascending: false}).range(...pageRange(f.page));
@@ -130,10 +130,10 @@ export async function adminScans(raw: unknown) {
   await requireAdmin();
   const f = adminFilterSchema.extend({jobPage: z.coerce.number().int().min(1).max(10000).default(1), jobStatus: z.enum(['all','queued','running','succeeded','failed','dead','canceled']).default('all')}).parse(raw);
   const db = createAdminClient();
-  let scans = db.from('scans').select('id,site_id,status,kind,score,failure_code,created_at,started_at,completed_at', {count: 'exact'});
+  let scans = db.from('scans').select('id,site_id,status,kind,score,failure_code,created_at,started_at,completed_at', {count: 'planned'});
   if (f.status !== 'all' && ['queued','running','completed','failed','canceled'].includes(f.status)) scans = scans.eq('status', f.status as Tables<'scans'>['status']);
   if (f.q && z.string().uuid().safeParse(f.q).success) scans = scans.or(`id.eq.${f.q},site_id.eq.${f.q}`);
-  let jobQuery = db.from('scan_jobs').select('id,scan_id,module_key,step_key,status,attempts,max_attempts,last_error_code,available_at,locked_at,lease_expires_at,created_at', {count: 'exact'});
+  let jobQuery = db.from('scan_jobs').select('id,scan_id,module_key,step_key,status,attempts,max_attempts,last_error_code,available_at,locked_at,lease_expires_at,created_at', {count: 'planned'});
   if (f.jobStatus !== 'all') jobQuery = jobQuery.eq('status', f.jobStatus);
   const [result,jobs] = await Promise.all([
     scans.order('created_at', {ascending: false}).range(...pageRange(f.page)),
@@ -164,9 +164,9 @@ export async function adminInbox(raw: unknown) {
   const f = adminFilterSchema.parse(raw);
   const db = createAdminClient();
   const [blocked,abuse,contact] = await Promise.all([
-    db.from('blocked_domains').select('*', {count: 'exact'}).order('created_at', {ascending: false}).range(...pageRange(f.page)),
-    db.from('abuse_reports').select('*', {count: 'exact'}).order('created_at', {ascending: false}).range(...pageRange(f.page)),
-    db.from('contact_messages').select('*', {count: 'exact'}).order('created_at', {ascending: false}).range(...pageRange(f.page))
+    db.from('blocked_domains').select('*', {count: 'planned'}).order('created_at', {ascending: false}).range(...pageRange(f.page)),
+    db.from('abuse_reports').select('*', {count: 'planned'}).order('created_at', {ascending: false}).range(...pageRange(f.page)),
+    db.from('contact_messages').select('*', {count: 'planned'}).order('created_at', {ascending: false}).range(...pageRange(f.page))
   ]);
   [blocked,abuse,contact].forEach((r) => check(r.error));
   return {blocked: blocked.data ?? [], abuse: abuse.data ?? [], contact: contact.data ?? [], count: Math.max(blocked.count ?? 0, abuse.count ?? 0, contact.count ?? 0), filter: f};
@@ -177,8 +177,8 @@ export async function adminContent(raw: unknown) {
   const f = adminFilterSchema.parse(raw);
   const db = createAdminClient();
   const [announcements,changelog] = await Promise.all([
-    db.from('announcements').select('*', {count: 'exact'}).order('created_at', {ascending: false}).range(...pageRange(f.page)),
-    db.from('changelog_entries').select('*', {count: 'exact'}).order('created_at', {ascending: false}).range(...pageRange(f.page))
+    db.from('announcements').select('*', {count: 'planned'}).order('created_at', {ascending: false}).range(...pageRange(f.page)),
+    db.from('changelog_entries').select('*', {count: 'planned'}).order('created_at', {ascending: false}).range(...pageRange(f.page))
   ]);
   check(announcements.error); check(changelog.error);
   return {announcements: announcements.data ?? [], changelog: changelog.data ?? [], count: Math.max(announcements.count ?? 0, changelog.count ?? 0), filter: f};
@@ -191,7 +191,7 @@ export async function adminSystem(raw: unknown) {
   const [flags,settings,audit] = await Promise.all([
     db.from('feature_flags').select('*').order('key'),
     db.from('app_settings').select('*').order('key'),
-    db.from('admin_audit_log').select('id,actor_id,action,target_table,target_id,details,ip_address,created_at', {count: 'exact'}).order('created_at', {ascending: false}).range(...pageRange(f.page))
+    db.from('admin_audit_log').select('id,actor_id,action,target_table,target_id,details,ip_address,created_at', {count: 'planned'}).order('created_at', {ascending: false}).range(...pageRange(f.page))
   ]);
   [flags,settings,audit].forEach((r) => check(r.error));
   return {flags: flags.data ?? [], settings: settings.data ?? [], audit: audit.data ?? [], auditCount: audit.count ?? 0, filter: f};

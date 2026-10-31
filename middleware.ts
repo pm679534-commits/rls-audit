@@ -74,9 +74,20 @@ export async function middleware(request: NextRequest) {
         }
       }
     });
-    const {data: {user}} = await supabase.auth.getUser();
-    if (!user) response = NextResponse.redirect(new URL(`/${locale}/sign-in${path.includes('/dashboard/team/invite') ? `?next=${encodeURIComponent(`${path.slice(locale.length + 1)}${request.nextUrl.search}`)}` : ''}`, request.url));
-    else if (!user.email_confirmed_at) response = NextResponse.redirect(new URL(`/${locale}/verify-email${path.includes('/dashboard/team/invite') ? `?next=${encodeURIComponent(`${path.slice(locale.length + 1)}${request.nextUrl.search}`)}` : ''}`, request.url));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([
+        supabase.auth.getClaims(),
+        new Promise<null>((resolve) => {timer = setTimeout(() => resolve(null), 3000);})
+      ]);
+      // A timeout falls through to the server layout, which still uses getUser
+      // and RLS. Claims are only a quick navigation hint, never authorization.
+      if (result && !result.data?.claims) response = NextResponse.redirect(new URL(`/${locale}/sign-in${path.includes('/dashboard/team/invite') ? `?next=${encodeURIComponent(`${path.slice(locale.length + 1)}${request.nextUrl.search}`)}` : ''}`, request.url));
+    } catch {
+      // Protected layouts remain the source of truth when Supabase is slow.
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
   for (const cookie of refreshedCookies) response.cookies.set(cookie.name, cookie.value, cookie.options);
   return securityHeaders(response, nonce, csp);

@@ -16,8 +16,8 @@ export default async function OnboardingPage() {
   const trial = await getTrialStatus(context);
   const trialText = await getTranslations('Phase5.trial');
   if (site) {
-    const {count} = await db.from('scans').select('id', {head: true, count: 'exact'}).eq('site_id', site.id);
-    if (site.verified_at && count) redirect(`/${context.profile.locale}/dashboard`);
+    const {data: existingScans} = await db.from('scans').select('id').eq('site_id', site.id).limit(1);
+    if (site.verified_at && existingScans?.length) redirect(`/${context.profile.locale}/dashboard`);
   }
   const {data: challenges} = site ? await db.from('site_verifications').select('*').eq('site_id', site.id).eq('status', 'pending').order('created_at', {ascending: false}).limit(1) : {data: null};
   return <main className="container max-w-3xl space-y-8 py-12">

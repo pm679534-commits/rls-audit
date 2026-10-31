@@ -2,22 +2,24 @@ import {getTranslations} from 'next-intl/server';
 import {DashboardShell} from '@/components/shells/dashboard-shell';
 import {requirePageUser} from '@/lib/auth/page';
 import {TrialBanner} from '@/components/account/trial-banner';
-import {CommandPalette} from '@/components/dashboard/command-palette';
+import {CommandPaletteLauncher} from '@/components/dashboard/command-palette-launcher';
 import {createClient} from '@/lib/supabase/server';
 import {AnnouncementBanner} from '@/components/announcement-banner';
 import {Suspense} from 'react';
 import {Skeleton} from '@/components/ui/skeleton';
 import {unreadNotificationCount} from '@/lib/notifications/unread';
 
+export const dynamic = 'force-dynamic';
+
 async function Palette() {
   const db = await createClient();
   const {data: sites} = await db.from('sites').select('id,name,domain').order('name').limit(50);
-  return <CommandPalette sites={sites ?? []} />;
+  return <CommandPaletteLauncher sites={sites ?? []} />;
 }
 
 async function UnreadCount({userId}: {userId: string}) {
   const count = await unreadNotificationCount(userId);
-  return count ? <span className="ml-1 tabular-nums">({count})</span> : null;
+  return count ? <span className="ml-1 tabular-nums">({count === 100 ? '99+' : count})</span> : null;
 }
 
 export default async function DashboardLayout({children}: {children: React.ReactNode}) {

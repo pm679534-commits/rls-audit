@@ -11,6 +11,7 @@ import {DisposableEmailError, EmailUnverifiedError, UnauthenticatedError, Valida
 import {requireMutationAccess} from './trial';
 import {sendEmail} from '@/lib/email';
 import {emailTemplate} from '@/lib/email/templates';
+import {afterAuthResponse} from './background';
 
 const safeNext = z.string().regex(/^\/dashboard\/team\/invite\?token=[A-Za-z0-9_-]{43}$/).optional();
 const credentials = z.object({email: emailSchema, password: passwordSchema, locale: localeSchema, turnstileToken: z.string().max(4096).optional(), next: safeNext});
@@ -40,8 +41,9 @@ export async function signUp(raw: unknown) {
       throw new ValidationError();
     }
     if (!data?.properties.action_link) throw new Error('Could not create verification link');
-    await sendEmail({to: input.email, locale: input.locale,
-      ...emailTemplate('verification', input.locale, {url: data.properties.action_link})});
+    const link = data.properties.action_link;
+    afterAuthResponse('auth_signup_email_failed', () => sendEmail({to: input.email, locale: input.locale,
+      ...emailTemplate('verification', input.locale, {url: link})}));
     return {sent: true};
   }, {access: 'public', rateLimit: {name: 'auth-signup', limit: 5, windowSeconds: 3600}})(raw);
 }
@@ -88,8 +90,9 @@ export async function resendVerification(raw: unknown) {
         const {data: link, error} = await admin.auth.admin.generateLink({type: 'magiclink', email: input.email,
           options: {redirectTo: callback(input.locale, input.next)}});
         if (error || !link?.properties.action_link) throw new Error('Could not create verification link');
-        await sendEmail({to: input.email, locale: input.locale,
-          ...emailTemplate('verification', input.locale, {url: link.properties.action_link})});
+        const actionLink = link.properties.action_link;
+        afterAuthResponse('auth_resend_email_failed', () => sendEmail({to: input.email, locale: input.locale,
+          ...emailTemplate('verification', input.locale, {url: actionLink})}));
       }
     }
     return {sent: true};

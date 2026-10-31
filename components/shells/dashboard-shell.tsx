@@ -29,9 +29,9 @@ export function DashboardShell({children, navigation, title, action, notificatio
   return <div className="min-h-dvh bg-background">
     <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:p-3">{common('skipToContent')}</a>
     <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r bg-card lg:flex"><div className="flex h-20 items-center border-b px-6"><Logo /></div><div className="flex-1 overflow-y-auto p-4"><NavLinks items={navigation} notificationCount={notificationCount} /></div></aside>
-    <div className="lg:pl-64"><header className="sticky top-0 z-40 flex min-h-20 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur sm:px-6 lg:px-8">
-      <div className="flex min-w-0 items-center gap-3">{navigation.length > 0 && <Sheet><SheetTrigger asChild><Button variant="ghost" size="icon" className="lg:hidden" aria-label={t('openMenu')}><Menu aria-hidden="true" /></Button></SheetTrigger><SheetContent side="left"><SheetTitle className="mb-6"><Logo /></SheetTitle><NavLinks items={navigation} mobile notificationCount={notificationCount} /></SheetContent></Sheet>}<span className="truncate text-sm font-semibold sm:text-base">{title ?? t('dashboard')}</span></div>
-      <div className="flex items-center gap-1">{action}<LanguageSwitcher /><ThemeToggle /></div>
-    </header><main id="main-content" className="mx-auto w-full max-w-[1440px] p-4 pb-20 sm:p-6 lg:p-8">{children}</main></div>
+    <div className="min-w-0 lg:pl-64"><header className="sticky top-0 z-40 flex min-h-20 min-w-0 items-center justify-between gap-2 border-b bg-background/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:gap-3 sm:px-6 lg:px-8">
+      <div className="flex min-w-0 items-center gap-2">{navigation.length > 0 && <Sheet><SheetTrigger asChild><Button variant="ghost" size="icon" className="shrink-0 lg:hidden" aria-label={t('openMenu')}><Menu aria-hidden="true" /></Button></SheetTrigger><SheetContent side="left"><SheetTitle className="mb-6"><Logo /></SheetTitle><NavLinks items={navigation} mobile notificationCount={notificationCount} /></SheetContent></Sheet>}<span className="hidden truncate text-sm font-semibold sm:inline sm:text-base">{title ?? t('dashboard')}</span></div>
+      <div className="flex min-w-0 shrink-0 items-center gap-1">{action}<LanguageSwitcher /><ThemeToggle /></div>
+    </header><main id="main-content" className="mx-auto w-full max-w-[1440px] min-w-0 p-4 pb-[max(5rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">{children}</main></div>
   </div>;
 }

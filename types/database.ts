@@ -211,6 +211,7 @@ export type Database = {
       can_edit_team: {Args: {p_team: string}; Returns: boolean};
       can_view_site: {Args: {p_site: string}; Returns: boolean};
       can_edit_site: {Args: {p_site: string}; Returns: boolean};
+      can_edit_sites: {Args: {p_site_ids: string[]}; Returns: {site_id: string; can_edit: boolean}[]};
       effective_plan: {Args: {p_user: string}; Returns: PlanId | null};
       current_entitlements: {Args: {p_user: string}; Returns: {
         effective_plan: PlanId | null; is_trial: boolean; read_only: boolean;
@@ -246,6 +247,8 @@ export type Database = {
       on_entitlement_change: {Args: Record<string, never>; Returns: unknown};
       on_profile_entitlement_change: {Args: Record<string, never>; Returns: unknown};
       rate_limit_check: {Args: {p_key: string; p_limit: number; p_window: string}; Returns: boolean};
+      rate_limit_status: {Args: {p_key: string; p_limit: number; p_window: string}; Returns: {allowed: boolean; remaining: number; reset_seconds: number}[]};
+      latest_completed_scan_ids: {Args: {p_site_ids: string[]; p_cutoff: string}; Returns: {id: string; site_id: string; created_at: string}[]};
       claim_scan_jobs: {Args: {p_limit: number; p_worker: string; p_lease_seconds?: number}; Returns: Database['public']['Tables']['scan_jobs']['Row'][]};
       recover_stuck_jobs: {Args: {p_limit?: number}; Returns: number};
       start_scan: {Args: {p_site: string; p_kind: ScanKind; p_requester: string | null; p_idempotency?: string | null; p_priority?: number}; Returns: Database['public']['Tables']['scans']['Row']};

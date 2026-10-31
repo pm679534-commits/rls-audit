@@ -2,7 +2,7 @@ import {getTranslations} from 'next-intl/server';
 import {Activity, CreditCard, UserRoundPlus, AlertTriangle, ListTodo, TrendingDown} from 'lucide-react';
 import {requireAdmin} from '@/lib/auth';
 import {adminOverview} from '@/lib/admin/data';
-import {AdminMetricsChart} from '@/components/admin/metrics-chart';
+import {AdminMetricsChartLazy as AdminMetricsChart} from '@/components/admin/metrics-chart-lazy';
 import {AdminHeading, AdminSection} from '@/components/admin/primitives';
 import {StatCard} from '@/components/stat-card';
 

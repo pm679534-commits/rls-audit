@@ -5,12 +5,14 @@ import {redirect} from 'next/navigation';
 import {createClient} from '@/lib/supabase/server';
 import {ForbiddenError} from '@/lib/errors';
 import {getSession, requireAdmin, type UserContext} from './index';
+import {withDeadline} from '@/lib/supabase/deadline';
 
 export async function requirePageUser(): Promise<UserContext> {
   const [context, locale] = await Promise.all([getSession(), getLocale()]);
   if (!context) {
     // A missing profile must not start a sign-in loop for an authenticated user.
-    const {data: {user}} = await (await createClient()).auth.getUser();
+    const result = await withDeadline((await createClient()).auth.getUser()).catch(() => null);
+    const user = result?.data.user;
     redirect(`/${locale}/${user ? 'not-authorized' : 'sign-in'}`);
   }
   if (!context.user.email_confirmed_at) redirect(`/${locale}/verify-email`);

@@ -13,7 +13,7 @@ export const buttonVariants = cva('inline-flex min-h-10 items-center justify-cen
       destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
       link: 'text-primary underline-offset-4 hover:underline'
     },
-    size: {default: 'h-11 px-5', sm: 'h-9 min-h-9 px-3', lg: 'h-12 px-7', icon: 'size-11 p-0'}
+    size: {default: 'h-11 px-5', sm: 'min-h-11 px-3', lg: 'h-12 px-7', icon: 'size-11 p-0'}
   }, defaultVariants: {variant: 'default', size: 'default'}
 });
 

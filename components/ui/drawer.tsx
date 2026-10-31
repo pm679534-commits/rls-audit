@@ -10,7 +10,7 @@ export const DrawerClose = DrawerPrimitive.Close;
 export const DrawerPortal = DrawerPrimitive.Portal;
 export const DrawerContent = React.forwardRef<React.ElementRef<typeof DrawerPrimitive.Content>, React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>>(({className, children, ...props}, ref) =>
   <DrawerPortal><DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60" />
-    <DrawerPrimitive.Content ref={ref} className={cn('fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col rounded-t-xl border bg-background p-6 shadow-soft', className)} {...props}>
+    <DrawerPrimitive.Content ref={ref} className={cn('fixed inset-x-0 bottom-0 z-50 flex h-dvh max-h-dvh flex-col overflow-y-auto rounded-none border bg-background px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-soft sm:h-auto sm:max-h-[90dvh] sm:rounded-t-xl sm:p-6', className)} {...props}>
       <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-muted" aria-hidden="true" />{children}
     </DrawerPrimitive.Content>
   </DrawerPortal>

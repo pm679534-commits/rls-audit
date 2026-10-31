@@ -18,8 +18,8 @@ DialogOverlay.displayName = 'DialogOverlay';
 
 export const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>>(({className, children, ...props}, ref) => {
   const t = useTranslations('Common');
-  return <DialogPortal><DialogOverlay /><DialogPrimitive.Content ref={ref} className={cn('fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border bg-background p-6 shadow-soft duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0', className)} {...props}>
-    {children}<DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring" aria-label={t('close')}><X className="size-4" /></DialogPrimitive.Close>
+  return <DialogPortal><DialogOverlay /><DialogPrimitive.Content ref={ref} className={cn('fixed inset-0 z-50 grid h-dvh w-full max-w-none content-start gap-4 overflow-y-auto border bg-background px-4 pt-[max(3.5rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-soft duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[90dvh] sm:w-[calc(100%-2rem)] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:p-6', className)} {...props}>
+    {children}<DialogPrimitive.Close className="absolute right-2 top-2 grid size-11 place-items-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring" aria-label={t('close')}><X className="size-5" /></DialogPrimitive.Close>
   </DialogPrimitive.Content></DialogPortal>;
 });
 DialogContent.displayName = 'DialogContent';

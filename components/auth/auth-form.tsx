@@ -47,7 +47,7 @@ export function AuthForm({mode, turnstileKey, nonce, callbackError = false, next
     <h1 className="font-display text-3xl">{t(`${mode}.title`)}</h1>
     <p className="mt-2 text-sm text-muted-foreground">{t(`${mode}.description`)}</p>
     <form onSubmit={submit} className="mt-7 space-y-4">
-      {showEmail && <div className="space-y-2"><Label htmlFor="auth-email">{t('email')}</Label><Input id="auth-email" name="email" type="email" autoComplete="email" required /></div>}
+      {showEmail && <div className="space-y-2"><Label htmlFor="auth-email">{t('email')}</Label><Input id="auth-email" name="email" type="email" inputMode="email" autoComplete="email" required /></div>}
       {showPassword && <div className="space-y-2"><Label htmlFor="auth-password">{t('password')}</Label><Input id="auth-password" name="password" type="password" minLength={12} autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} required /></div>}
       {turnstileKey && mode !== 'reset-password' && <><Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" nonce={nonce} /><div className="cf-turnstile" data-sitekey={turnstileKey} data-action={turnstileAction} /></>}
       {message && <p role="status" className="rounded-md bg-muted p-3 text-sm">{message}</p>}

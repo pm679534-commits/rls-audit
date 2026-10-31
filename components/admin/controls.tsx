@@ -18,7 +18,7 @@ export function AdminActionButton({payload, label, confirmMessage, reasonLabel, 
     if (confirmMessage && confirmation !== 'DELETE') return;
     if (reasonLabel && !window.confirm(label)) return;
     start(async () => {const result = await adminMutate({...payload, ...(confirmMessage ? {confirmation} : {}), ...(reasonLabel ? {reason} : {})}); setMessage(result.ok ? '' : result.error.message); if (result.ok) router.refresh();});
-  }} className={`rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50 ${destructive ? 'border-destructive text-destructive hover:bg-destructive/10' : 'hover:bg-accent'}`}>{pending ? '…' : label}</button>{message && <span role="alert" className="max-w-56 text-xs text-destructive">{message}</span>}</span>;
+  }} className={`min-h-11 rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50 ${destructive ? 'border-destructive text-destructive hover:bg-destructive/10' : 'hover:bg-accent'}`}>{pending ? '…' : label}</button>{message && <span role="alert" className="max-w-56 text-xs text-destructive">{message}</span>}</span>;
 }
 
 export function AdminForm({kind, fixed = {}, fields, submitLabel, successLabel, confirmMessage}: {kind: string; fixed?: Record<string, unknown>; fields: Field[]; submitLabel: string; successLabel: string; confirmMessage?: string}) {

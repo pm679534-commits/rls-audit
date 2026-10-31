@@ -12,7 +12,7 @@ import {removeStoredFiles} from '@/lib/account';
 import {paddleClient} from '@/lib/billing/paddle';
 import {syncSubscription, notifyPaymentFailed} from '@/lib/billing/sync';
 import {trustedClientIp} from '@/lib/rate-limit';
-import {revalidatePath} from 'next/cache';
+import {revalidatePath, revalidateTag} from 'next/cache';
 import type {Json} from '@/types/database';
 
 const id = z.string().uuid();
@@ -204,6 +204,10 @@ async function mutate(input: Input, context: UserContext) {
     revalidatePath('/[locale]/admin/users', 'page');
     revalidatePath('/[locale]/admin/users/[userId]', 'page');
   }
+  if (input.kind === 'flag') revalidateTag('system-features');
+  if (input.kind === 'maintenance') revalidateTag('maintenance');
+  if (input.kind.startsWith('announcement_')) revalidateTag('announcements');
+  if (input.kind.startsWith('changelog_')) revalidateTag('changelog');
   return {saved: true};
 }
 

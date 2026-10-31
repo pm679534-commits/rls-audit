@@ -2,6 +2,8 @@ import {getTranslations} from 'next-intl/server';
 import {AdminShell} from '@/components/shells/admin-shell';
 import {requirePageAdmin} from '@/lib/auth/page';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminLayout({children}: {children: React.ReactNode}) {
   const [, t] = await Promise.all([requirePageAdmin(), getTranslations('Phase8')]);
   const navigation = [

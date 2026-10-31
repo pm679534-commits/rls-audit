@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, type FormEvent} from 'react';
+import {useState, useTransition, type FormEvent} from 'react';
 import {useTranslations} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import {Button} from '@/components/ui/button';
@@ -14,12 +14,13 @@ export function SiteScanSettings({site, minHours, presence, canEdit, verified}: 
   const t = useTranslations('Phase7');
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [, startTransition] = useTransition();
   const [message, setMessage] = useState('');
   async function run(action: () => Promise<{ok: boolean; error?: {message: string}}>) {
     setBusy(true); setMessage('');
     const result = await action();
     setBusy(false); setMessage(result.ok ? t('settingsSaved') : result.error?.message ?? t('actionFailed'));
-    if (result.ok) router.refresh();
+    if (result.ok) startTransition(() => router.refresh());
   }
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = new FormData(event.currentTarget);

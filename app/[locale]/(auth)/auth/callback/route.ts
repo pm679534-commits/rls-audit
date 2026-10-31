@@ -1,9 +1,9 @@
-import {NextResponse, after, type NextRequest} from 'next/server';
+import {NextResponse, type NextRequest} from 'next/server';
 import {createServerClient} from '@supabase/ssr';
 import {getPublicEnv} from '@/lib/env';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {z} from 'zod';
-import {logUnexpectedError} from '@/lib/logger';
+import {afterAuthResponse} from '@/lib/auth/background';
 
 const callbackQuery = z.object({
   code: z.string().min(1).max(4096).optional(),
@@ -31,12 +31,10 @@ export async function GET(request: NextRequest, {params}: {params: Promise<{loca
   if (error) return NextResponse.redirect(new URL(`/${language}/sign-in?error=callback`, base));
   if (data.user?.email_confirmed_at && next === '/onboarding') {
     const userId = data.user.id;
-    after(async () => {
-      try {
+    afterAuthResponse('auth_welcome_notification_failed', async () => {
         const {error: insertError} = await createAdminClient().from('notifications').insert({user_id: userId, type: 'welcome',
           title_key: 'Notifications.welcomeTitle', body_key: 'Notifications.welcomeBody', data: {eventKey: `welcome:${userId}`}});
         if (insertError && insertError.code !== '23505') throw insertError;
-      } catch (failure) {logUnexpectedError('auth_welcome_notification_failed', failure, {userId});}
     });
   }
   return response;

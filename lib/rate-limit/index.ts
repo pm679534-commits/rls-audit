@@ -11,6 +11,14 @@ export type RateLimitResult = {allowed: boolean; limit: number; remaining: numbe
 export async function rateLimitCheck(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
   if (!key || key.length > 512 || !Number.isInteger(limit) || limit < 1 || limit > 10000 || !Number.isInteger(windowSeconds) || windowSeconds < 1 || windowSeconds > 86400) throw new RangeError('Invalid rate limit options');
   const db = createAdminClient();
+  const compact = await db.rpc('rate_limit_status', {p_key: key, p_limit: limit, p_window: `${windowSeconds} seconds`});
+  if (!compact.error && compact.data?.[0]) {
+    const {allowed, remaining, reset_seconds} = compact.data[0];
+    const headers = new Headers({'RateLimit-Limit': String(limit), 'RateLimit-Remaining': String(remaining), 'RateLimit-Reset': String(reset_seconds)});
+    if (!allowed) headers.set('Retry-After', String(reset_seconds));
+    return {allowed, limit, remaining, resetAt: new Date(Date.now() + reset_seconds * 1000), headers};
+  }
+  if (compact.error && !['PGRST202','42883'].includes(compact.error.code)) throw new Error('Rate limit service unavailable');
   const {data: allowed, error} = await db.rpc('rate_limit_check', {p_key: key, p_limit: limit, p_window: `${windowSeconds} seconds`});
   if (error || allowed === null) throw new Error('Rate limit service unavailable');
   const keyHash = `\\x${createHash('sha256').update(key).digest('hex')}`;

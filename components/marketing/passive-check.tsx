@@ -4,6 +4,7 @@ import {useState, type FormEvent} from 'react';
 import Script from 'next/script';
 import {ArrowRight, ShieldCheck, ShieldAlert} from 'lucide-react';
 import {useLocale, useTranslations} from 'next-intl';
+import {LazyMotion, domAnimation, m, MotionConfig} from 'framer-motion';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
@@ -36,7 +37,7 @@ export function PassiveCheck({turnstileKey, nonce}: {turnstileKey?: string; nonc
     } catch { setMessage(errors('EXTERNAL_SERVICE')); }
     finally { setBusy(false); }
   }
-  return <div className="rounded-2xl border bg-card p-5 shadow-soft sm:p-7">
+  return <LazyMotion features={domAnimation}><MotionConfig reducedMotion="user"><m.div initial={{opacity: 0, y: 8}} animate={{opacity: 1, y: 0}} transition={{duration: 0.25}} className="rounded-2xl border bg-card p-5 shadow-soft sm:p-7">
     <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-accent text-accent-foreground"><ShieldCheck aria-hidden="true" /></span>
       <div><h2 className="text-lg font-semibold">{t('title')}</h2><p className="text-sm text-muted-foreground">{t('subtitle')}</p></div></div>
     <form className="mt-6 space-y-3" onSubmit={submit}>
@@ -55,5 +56,5 @@ export function PassiveCheck({turnstileKey, nonce}: {turnstileKey?: string; nonc
         <p className="text-xs text-muted-foreground">{t('limited')}</p><Button variant="outline" asChild><Link href="/sign-up">{t('fullScan')}<ArrowRight aria-hidden="true" /></Link></Button>
       </div> : <div className="flex min-h-28 items-center gap-4 rounded-xl border border-dashed bg-muted/30 p-5"><ShieldAlert className="size-7 shrink-0 text-muted-foreground motion-safe:animate-pulse" aria-hidden="true" /><p className="text-sm text-muted-foreground">{t('empty')}</p></div>}
     </div>
-  </div>;
+  </m.div></MotionConfig></LazyMotion>;
 }

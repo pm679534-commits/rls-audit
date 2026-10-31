@@ -6,6 +6,7 @@ import {createClient} from '@/lib/supabase/server';
 import {EmailUnverifiedError, ForbiddenError, NotFoundError, ReadOnlyError, SuspendedError, UnauthenticatedError} from '@/lib/errors';
 import type {Database, Tables} from '@/types/database';
 import type {PlanFeature} from '@/lib/plans';
+import {withDeadline} from '@/lib/supabase/deadline';
 import {resolveEntitlements, requireFeature} from '@/lib/billing/entitlements';
 
 export type UserContext = {user: User; profile: Tables<'profiles'>};
@@ -14,11 +15,15 @@ export type TeamRole = Database['public']['Enums']['team_role'];
 
 export const getSession = cache(async (): Promise<UserContext | null> => {
   const db = await createClient();
-  const {data: {user}, error} = await db.auth.getUser();
-  if (error || !user) return null;
-  const {data: profile, error: profileError} = await db.from('profiles').select('*').eq('id', user.id).single();
-  if (profileError || !profile) return null;
-  return {user, profile};
+  try {
+    const {data: {user}, error} = await withDeadline(db.auth.getUser());
+    if (error || !user) return null;
+    const {data: profile, error: profileError} = await withDeadline(db.from('profiles').select('*').eq('id', user.id).single());
+    if (profileError || !profile) return null;
+    return {user, profile};
+  } catch {
+    return null;
+  }
 });
 
 export function requireVerifiedEmail(context: UserContext): UserContext {

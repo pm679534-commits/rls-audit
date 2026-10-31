@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, type FormEvent} from 'react';
+import {useState, useTransition, type FormEvent} from 'react';
 import {useLocale, useTranslations} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import {Button} from '@/components/ui/button';
@@ -25,13 +25,14 @@ export function AccountSettings({profile, keys, exports, sessions, canApi, fullA
   const [message, setMessage] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
+  const [, startTransition] = useTransition();
   const p = profile.notification_preferences && typeof profile.notification_preferences === 'object' && !Array.isArray(profile.notification_preferences) ? profile.notification_preferences as Record<string, unknown> : {};
   async function run(operation: () => Promise<Result>, success = t('saved')) {
     setBusy(true); setMessage('');
     const result = await operation();
     setBusy(false);
     setMessage(result.ok ? success : result.error.message);
-    if (result.ok) router.refresh();
+    if (result.ok) startTransition(() => router.refresh());
     return result;
   }
   function fields(event: FormEvent<HTMLFormElement>) {event.preventDefault(); return new FormData(event.currentTarget);}

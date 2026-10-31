@@ -1,7 +1,7 @@
 import {getTranslations} from 'next-intl/server';
 import {Activity, CalendarClock, Globe2, ShieldAlert} from 'lucide-react';
 import {getOverview} from '@/lib/dashboard/overview';
-import {ScoreChart} from '@/components/dashboard/score-chart';
+import {ScoreChartLazy as ScoreChart} from '@/components/dashboard/score-chart-lazy';
 import {ScoreRing} from '@/components/score-ring';
 import {StatCard} from '@/components/stat-card';
 import {SeverityBadge} from '@/components/severity-badge';

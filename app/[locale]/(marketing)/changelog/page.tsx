@@ -9,9 +9,9 @@ import type {Locale} from '@/i18n/routing';
 
 const publicChangelog = unstable_cache(async (page: number) => {
   const now = new Date().toISOString();
-  return createAdminClient().from('changelog_entries').select('id,slug,title_en,title_az,body_en,body_az,published_at', {count:'exact'})
+  return createAdminClient().from('changelog_entries').select('id,slug,title_en,title_az,body_en,body_az,published_at', {count:'planned'})
     .not('published_at','is',null).lte('published_at',now).order('published_at',{ascending:false}).range((page - 1) * 25, page * 25 - 1);
-}, ['siteguard-public-changelog'], {revalidate: 60});
+}, ['siteguard-public-changelog'], {revalidate: 60, tags: ['changelog']});
 
 export async function generateMetadata({params}: {params: Promise<{locale: Locale}>}): Promise<Metadata> {
   const {locale} = await params; const t = await getTranslations({locale, namespace: 'Marketing.seo'});

@@ -7,13 +7,15 @@ import {Button} from '@/components/ui/button';
 import {createShareLinkAction, revokeShareLinkAction, requestReportExportAction} from '@/lib/reports/actions';
 import type {Tables} from '@/types/database';
 import {BRAND_NAME} from '@/lib/config';
+import {Link} from '@/i18n/navigation';
 
 type Site = Pick<Tables<'sites'>, 'id' | 'name' | 'domain' | 'owner_id' | 'last_score'>;
 type Scan = Pick<Tables<'scans'>, 'id' | 'site_id' | 'score' | 'completed_at' | 'created_at'>;
-type Link = Pick<Tables<'share_links'>, 'id' | 'site_id' | 'scan_id' | 'created_at' | 'expires_at' | 'revoked_at' | 'last_accessed_at'>;
+type ShareLink = Pick<Tables<'share_links'>, 'id' | 'site_id' | 'scan_id' | 'created_at' | 'expires_at' | 'revoked_at' | 'last_accessed_at'>;
+type ExportRow = Pick<Tables<'data_exports'>, 'id' | 'format' | 'status' | 'created_at' | 'storage_path'>;
 
-export function ReportManager({sites, scans, links, exports: exportRows, siteGates, readOnly, baseUrl}: {sites: Site[]; scans: Scan[]; links: Link[]; exports: Tables<'data_exports'>[];
-  siteGates: Record<string, {edit: boolean; pdf: boolean; data: boolean; badge: boolean; historyDays: number}>; readOnly: boolean; baseUrl: string}) {
+export function ReportManager({sites, scans, links, exports: exportRows, siteGates, readOnly, baseUrl, page, hasNext}: {sites: Site[]; scans: Scan[]; links: ShareLink[]; exports: ExportRow[];
+  siteGates: Record<string, {edit: boolean; pdf: boolean; data: boolean; badge: boolean; historyDays: number}>; readOnly: boolean; baseUrl: string; page: number; hasNext: boolean}) {
   const t = useTranslations('Phase7');
   const statuses = useTranslations('Phase5Labels.exportStatus');
   const locale = useLocale();
@@ -60,5 +62,6 @@ export function ReportManager({sites, scans, links, exports: exportRows, siteGat
     </section>
     <section className="rounded-xl border bg-card p-5"><h2 className="text-xl font-semibold">{t('sharedLinks')}</h2>{links.length ? <ul className="mt-4 divide-y">{links.map((link) => <li key={link.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><div><p>{sites.find((site) => site.id === link.site_id)?.name ?? t('site')} · {new Date(link.created_at).toLocaleDateString(locale)}</p><p className="text-xs text-muted-foreground">{link.revoked_at ? t('revoked') : link.expires_at && new Date(link.expires_at).getTime() <= Date.now() ? t('expired') : t('active')} · {t('expiresAt', {date: link.expires_at ? new Date(link.expires_at).toLocaleDateString(locale) : '—'})}</p></div>{!link.revoked_at && <Button variant="outline" size="sm" disabled={busy || !siteGates[link.site_id]?.edit || readOnly} onClick={() => revoke(link.id)}>{t('revoke')}</Button>}</li>)}</ul> : <p className="mt-4 text-sm text-muted-foreground">{t('noShareLinks')}</p>}</section>
     <section className="rounded-xl border bg-card p-5"><h2 className="text-xl font-semibold">{t('exportRequests')}</h2>{exportRows.length ? <ul className="mt-4 divide-y">{exportRows.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span>{item.format.toUpperCase()} · {statuses(item.status)} · {new Date(item.created_at).toLocaleString(locale)}</span>{item.status === 'completed' && item.storage_path && <a href={`/api/account/export/${item.id}`} className="font-medium text-primary underline">{t('download')}</a>}</li>)}</ul> : <p className="mt-4 text-sm text-muted-foreground">{t('noExportRequests')}</p>}</section>
+    {(page > 1 || hasNext) && <nav aria-label={t('reportPages')} className="flex items-center justify-between gap-3 text-sm"><span>{t('pageNumber', {page})}</span><div className="flex gap-2">{page > 1 && <Link href={'/dashboard/reports?page=' + String(page - 1)} className="inline-flex min-h-11 items-center rounded-md border px-4">{t('previous')}</Link>}{hasNext && <Link href={'/dashboard/reports?page=' + String(page + 1)} className="inline-flex min-h-11 items-center rounded-md border px-4">{t('next')}</Link>}</div></nav>}
   </div>;
 }

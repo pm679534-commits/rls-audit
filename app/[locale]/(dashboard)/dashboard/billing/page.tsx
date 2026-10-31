@@ -9,13 +9,13 @@ export default async function Page() {
   const context = await requireUser();
   const entitlements = await resolveEntitlements(context);
   const db = await createClient();
-  const [{count: sites, error: sitesError}, {data: scans, error: scansError}, {data: team, error: teamError}] = await Promise.all([
-    db.from('sites').select('id', {count: 'exact', head: true}).eq('owner_id', context.user.id).eq('status', 'active'),
+  const [{data: sites, error: sitesError}, {data: scans, error: scansError}, {data: team, error: teamError}] = await Promise.all([
+    db.rpc('active_site_count', {p_user: context.user.id}),
     db.rpc('manual_scan_count_this_month', {p_user: context.user.id}),
     db.from('teams').select('id').eq('owner_id', context.user.id).maybeSingle()
   ]);
   if (sitesError || scansError || teamError) throw new Error('Billing usage unavailable');
-  const {count: seats, error: seatsError} = team ? await db.from('team_members').select('id', {count: 'exact', head: true}).eq('team_id', team.id) : {count: 0, error: null};
+  const {data: seats, error: seatsError} = team ? await db.rpc('team_seat_count', {p_team: team.id}) : {data: 0, error: null};
   if (seatsError) throw new Error('Billing usage unavailable');
   let invoices: Awaited<ReturnType<typeof billingProvider.listInvoices>> = [];
   let invoiceError = false;

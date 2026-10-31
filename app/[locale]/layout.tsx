@@ -1,4 +1,5 @@
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
+import localFont from 'next/font/local';
 import {NextIntlClientProvider, hasLocale} from 'next-intl';
 import {getMessages} from 'next-intl/server';
 import {notFound} from 'next/navigation';
@@ -10,9 +11,10 @@ import {CookieConsent} from '@/components/marketing/cookie-consent';
 import {routing} from '@/i18n/routing';
 import {BRAND_NAME, BRAND_TAGLINE} from '@/lib/config';
 import {isMaintenanceMode} from '@/lib/system/maintenance';
-import '@fontsource-variable/inter/wght.css';
-import '@fontsource/dm-serif-display/400.css';
 import '../globals.css';
+
+const inter = localFont({src: '../../public/fonts/inter-latin-ext-wght-normal.woff2', variable: '--font-inter', display: 'swap', weight: '100 900', preload: true});
+const display = localFont({src: '../../public/fonts/dm-serif-display-latin-ext-400-normal.woff2', variable: '--font-dm', display: 'swap', weight: '400', preload: true});
 
 export const metadata: Metadata = {
   title: {default: BRAND_NAME, template: `%s | ${BRAND_NAME}`},
@@ -20,7 +22,9 @@ export const metadata: Metadata = {
   alternates: {languages: {en: '/en', az: '/az'}},
   robots: {index: true, follow: true}
 };
+export const viewport: Viewport = {width: 'device-width', initialScale: 1, viewportFit: 'cover'};
 
+// Request-specific CSP nonces and maintenance state require request-time rendering.
 export const dynamic = 'force-dynamic';
 
 export default async function LocaleLayout({children, params}: Readonly<{children: React.ReactNode; params: Promise<{locale: string}>}>) {
@@ -35,7 +39,7 @@ export default async function LocaleLayout({children, params}: Readonly<{childre
   const messages = await getMessages();
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body>
+      <body className={`${inter.variable} ${display.variable}`}>
         <NextIntlClientProvider messages={messages}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange nonce={nonce}>
             {children}

@@ -22,16 +22,16 @@ function validateChannelUrl(type: Channel, raw: string): string {
   return url.toString();
 }
 
-export async function listNotifications() {
+export async function listNotifications(page = 1) {
   const context = await requireUser();
   const db = await createClient();
   const [{data: notifications, error}, count, {data: channels, error: channelsError}] = await Promise.all([
-    db.from('notifications').select('*').eq('user_id', context.user.id).order('created_at', {ascending: false}).limit(100),
+    db.from('notifications').select('id,title_key,body_key,created_at,site_id,read_at,type').eq('user_id', context.user.id).order('created_at', {ascending: false}).range((page - 1) * 25, page * 25),
     unreadNotificationCount(context.user.id),
     db.from('notification_channels').select('id,name,type,site_id,enabled,last_delivered_at,last_error_code,created_at').eq('owner_id', context.user.id).order('created_at', {ascending: false})
   ]);
   if (error || channelsError) throw new Error('Could not load notifications');
-  return {notifications: notifications ?? [], unread: count, channels: channels ?? []};
+  return {notifications: (notifications ?? []).slice(0, 25), hasNext: (notifications ?? []).length > 25, page, unread: count, channels: channels ?? []};
 }
 
 export async function markNotificationsRead(ids: string[]): Promise<void> {
