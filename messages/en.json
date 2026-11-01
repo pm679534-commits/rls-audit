@@ -132,6 +132,7 @@
     "cancellationScheduled": "Your subscription will end at the close of this billing period.", "portal": "Payment details", "cancelAtEnd": "Cancel at period end", "cancelConfirm": "Cancel your subscription at the end of this billing period?", "resume": "Resume subscription",
     "usage": "Usage this month", "sites": "Active sites", "manualScans": "Manual scans", "teamSeats": "Team seats",
     "choosePlan": "Choose a plan", "planDetails": "Up to {sites} sites and {seats} team seats.", "current": "Current selection", "changePlan": "Change plan", "selectPlan": "Select plan", "working": "Please wait…", "actionFailed": "Billing could not be updated. Please try again.",
+    "checkoutFailed": "We couldn't open checkout. Please try again. If the problem continues, contact support.",
     "invoices": "Invoices", "noInvoices": "No invoices yet.", "invoiceUnavailable": "Invoices are temporarily unavailable. Refresh to try again.", "viewInvoice": "View invoice",
     "paymentFailedTitle": "Payment needs attention", "paymentFailedBody": "Your latest payment failed. Update your payment details to restore your subscription.",
     "trialTitle": "Your Pro trial is active", "trialEnds": "Trial ends {date}.", "readOnlyTitle": "Workspace is read-only", "readOnlyBody": "Choose a plan to continue scanning and editing your sites."

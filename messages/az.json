@@ -133,6 +133,7 @@
     "cancellationScheduled": "Abunəliyiniz bu ödəniş dövrünün sonunda bitəcək.", "portal": "Ödəniş məlumatları", "cancelAtEnd": "Dövrün sonunda ləğv et", "cancelConfirm": "Abunəliyiniz bu ödəniş dövrünün sonunda ləğv edilsin?", "resume": "Abunəliyi bərpa et",
     "usage": "Bu ay istifadə", "sites": "Aktiv saytlar", "manualScans": "Əl ilə yoxlamalar", "teamSeats": "Komanda yerləri",
     "choosePlan": "Tarif seçin", "planDetails": "{sites} sayta və {seats} komanda yerinə qədər.", "current": "Cari seçim", "changePlan": "Tarifi dəyiş", "selectPlan": "Tarifi seç", "working": "Gözləyin…", "actionFailed": "Ödəniş məlumatları yenilənmədi. Yenidən cəhd edin.",
+    "checkoutFailed": "Ödəniş səhifəsini aça bilmədik. Yenidən cəhd edin. Problem davam edərsə, dəstək xidməti ilə əlaqə saxlayın.",
     "invoices": "Fakturalar", "noInvoices": "Hələ faktura yoxdur.", "invoiceUnavailable": "Fakturalar hazırda əlçatan deyil. Yenidən yoxlamaq üçün səhifəni təzələyin.", "viewInvoice": "Fakturaya bax",
     "paymentFailedTitle": "Ödənişə diqqət lazımdır", "paymentFailedBody": "Son ödəniş alınmadı. Abunəliyinizi bərpa etmək üçün ödəniş məlumatlarınızı yeniləyin.",
     "trialTitle": "Pro sınağınız aktivdir", "trialEnds": "Sınaq {date} tarixində bitir.", "readOnlyTitle": "İş sahəsi yalnız oxuma rejimindədir", "readOnlyBody": "Yoxlamalara və saytlarınızı redaktə etməyə davam etmək üçün tarif seçin."

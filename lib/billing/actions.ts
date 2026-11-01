@@ -19,8 +19,8 @@ export const startCheckout = createServerAction(choice, async (input, possibleCo
   const context = possibleContext!;
   const {subscription} = await resolveEntitlements(context);
   if (subscription && ['active', 'past_due', 'paused', 'trialing'].includes(subscription.status)) throw new ConflictError();
-  return {url: await billingProvider.createCheckout({ownerId: context.user.id, email: context.user.email ?? context.profile.email,
-    plan: input.plan, period: input.period, customerId: subscription?.paddle_customer_id ?? undefined})};
+  return {url: await billingProvider.createCheckout({ownerId: context.user.id, email: context.profile.email,
+    plan: input.plan, period: input.period})};
 }, {rateLimit: {name: 'billing_checkout', limit: 5, windowSeconds: 3600}});
 
 export const changeBillingPlan = createServerAction(choice, async (input, possibleContext) => {

@@ -123,6 +123,9 @@ export type Database = {
         cancel_at_period_end: boolean; canceled_at: string | null;
         created_at: string; updated_at: string;
       }, 'owner_id' | 'plan_id' | 'status' | 'billing_period'>;
+      billing_customers: Table<{
+        user_id: string; paddle_customer_id: string; created_at: string; updated_at: string;
+      }, 'user_id' | 'paddle_customer_id'>;
       billing_events: Table<{
         id: string; idempotency_key: string; provider_event_id: string;
         event_type: string; owner_id: string | null; payload: Json;

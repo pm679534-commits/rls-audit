@@ -27,15 +27,19 @@ export function BillingPage({entitlements, usage, invoices, invoiceError}: {enti
   const subscription = entitlements.subscription;
   const current = entitlements.effective_plan;
   const locale = typeof document === 'undefined' ? 'en' : document.documentElement.lang || 'en';
-  function run(name: string, action: () => Promise<{ok: boolean; data?: {url?: string; updated?: boolean}; error?: {message: string}}>) {
+  function run(name: string, action: () => Promise<{ok: boolean; data?: {url?: string; updated?: boolean}; error?: {message: string; code?: string}}>, checkout = false) {
     setError(null); setBusy(name);
     startTransition(async () => {
       try {
         const result = await action();
-        if (!result.ok) { setError(result.error?.message ?? t('actionFailed')); return; }
+        if (!result.ok) {
+          setError(checkout && (!result.error || ['INTERNAL', 'EXTERNAL_SERVICE'].includes(result.error.code ?? ''))
+            ? t('checkoutFailed') : result.error?.message ?? t('actionFailed'));
+          return;
+        }
         if (result.data?.url) { window.location.assign(result.data.url); return; }
         router.refresh();
-      } catch { setError(t('actionFailed')); } finally { setBusy(null); }
+      } catch { setError(t(checkout ? 'checkoutFailed' : 'actionFailed')); } finally { setBusy(null); }
     });
   }
   const activePaid = subscription && ['active', 'trialing', 'past_due', 'paused'].includes(subscription.status);
@@ -60,7 +64,7 @@ export function BillingPage({entitlements, usage, invoices, invoiceError}: {enti
     <section><div className="flex flex-wrap items-center justify-between gap-4"><h2 className="font-display text-2xl">{t('choosePlan')}</h2><div className="flex rounded-lg border p-1"><button aria-pressed={period === 'monthly'} onClick={() => setPeriod('monthly')} className={`rounded-md px-4 py-2 text-sm ${period === 'monthly' ? 'bg-primary text-primary-foreground' : ''}`}>{t('period.monthly')}</button><button aria-pressed={period === 'annual'} onClick={() => setPeriod('annual')} className={`rounded-md px-4 py-2 text-sm ${period === 'annual' ? 'bg-primary text-primary-foreground' : ''}`}>{t('period.annual')}</button></div></div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">{(['starter', 'pro', 'agency'] as PlanId[]).map((id) => <article key={id} className={`rounded-xl border bg-card p-5 ${current === id ? 'border-primary' : ''}`}><h3 className="text-xl font-semibold">{PLANS[id].name}</h3><p className="mt-3 text-3xl font-bold">€{PLANS[id].priceEur[period]} <span className="text-sm font-normal text-muted-foreground">/ {t(`period.${period}`)}</span></p><p className="mt-3 text-sm text-muted-foreground">{t('planDetails', {sites: PLANS[id].limits.sites, seats: PLANS[id].limits.teamMembers})}</p>
         <button disabled={pending || (!!activePaid && subscription?.plan_id === id && subscription.billing_period === period) || (!!activePaid && subscription?.status !== 'active' && subscription?.status !== 'trialing') || !!subscription?.cancel_at_period_end}
-          onClick={() => run(id, () => activePaid ? changeBillingPlan({plan: id, period}) : startCheckout({plan: id, period}))}
+          onClick={() => run(id, () => activePaid ? changeBillingPlan({plan: id, period}) : startCheckout({plan: id, period}), !activePaid)}
           className="mt-5 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{busy === id ? t('working') : activePaid && subscription?.plan_id === id && subscription.billing_period === period ? t('current') : activePaid ? t('changePlan') : t('selectPlan')}</button></article>)}</div>
     </section>
     {error && <p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive">{error}</p>}

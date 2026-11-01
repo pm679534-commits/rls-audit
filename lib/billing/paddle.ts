@@ -4,6 +4,7 @@ import {getServerEnv} from '@/lib/env';
 import {ExternalServiceError} from '@/lib/errors';
 import type {BillingPeriod, PlanId} from '@/lib/plans';
 import type {BillingProvider, BillingSubscription, BillingInvoice} from './provider';
+import {resolvePaddleCustomer} from './customers';
 
 let sdk: Paddle | undefined;
 export function paddleClient(): Paddle {
@@ -31,8 +32,8 @@ function ownerFromData(value: unknown): string | null {
 }
 
 export class PaddleBillingProvider implements BillingProvider {
-  async createCheckout(input: {ownerId: string; email: string; plan: PlanId; period: BillingPeriod; customerId?: string}): Promise<string> {
-    const customerId = input.customerId ?? (await paddleClient().customers.create({email: input.email, customData: {ownerId: input.ownerId}})).id;
+  async createCheckout(input: {ownerId: string; email: string; plan: PlanId; period: BillingPeriod}): Promise<string> {
+    const customerId = await resolvePaddleCustomer(paddleClient(), input.ownerId, input.email);
     const tx = await paddleClient().transactions.create({items: [{priceId: priceId(input.plan, input.period), quantity: 1}],
       customerId, collectionMode: 'automatic', customData: {ownerId: input.ownerId}});
     if (!tx.checkout?.url) throw new ExternalServiceError();

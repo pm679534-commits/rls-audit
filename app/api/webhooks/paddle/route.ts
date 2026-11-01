@@ -4,6 +4,7 @@ import {getServerEnv} from '@/lib/env';
 import {paddleClient} from '@/lib/billing/paddle';
 import {billingProvider} from '@/lib/billing/paddle';
 import {syncSubscription, notifyPaymentFailed} from '@/lib/billing/sync';
+import {linkPaddleCustomer, ownerForPaddleCustomer} from '@/lib/billing/customers';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {logger, logUnexpectedError} from '@/lib/logger';
 
@@ -79,11 +80,18 @@ async function handleWebhook(request: Request) {
           deletedOwner = true;
         }
       }
+      if (remote && data.customerId && remote.customerId !== data.customerId) throw new Error('billing_customer_mismatch');
       const {data: local} = remote ? await db.from('subscriptions').select('owner_id').eq('paddle_subscription_id', remote.id).single() : {data: null};
-      const {data: customerSubscription} = !local && data.customerId
-        ? await db.from('subscriptions').select('owner_id').eq('paddle_customer_id', data.customerId).maybeSingle()
-        : {data: null};
-      const ownerId = deletedOwner ? null : local?.owner_id ?? customerSubscription?.owner_id ?? hintedOwner;
+      const customerOwner = !deletedOwner && data.customerId ? await ownerForPaddleCustomer(data.customerId) : null;
+      const ownerId = deletedOwner ? null : local?.owner_id ?? customerOwner ?? hintedOwner;
+      if (ownerId && ((customerOwner && customerOwner !== ownerId) || (hintedOwner && hintedOwner !== ownerId)))
+        throw new Error('billing_owner_mismatch');
+      if (ownerId && data.customerId) {
+        await linkPaddleCustomer(ownerId, data.customerId);
+        const {error: consistencyError} = await db.from('subscriptions').update({paddle_customer_id: data.customerId})
+          .eq('owner_id', ownerId).is('paddle_customer_id', null);
+        if (consistencyError) throw consistencyError;
+      }
       if (event.eventType === 'transaction.payment_failed' || event.eventType === 'transaction.past_due') {
         if (!ownerId) throw new Error('billing_owner_missing');
         await notifyPaymentFailed(ownerId, event.eventId);
