@@ -7,9 +7,10 @@ import en from '@/messages/en.json';
 import az from '@/messages/az.json';
 import {logUnexpectedError} from '@/lib/logger';
 
-export type AppErrorCode = 'UNAUTHENTICATED' | 'EMAIL_UNVERIFIED' | 'SUSPENDED' | 'FORBIDDEN' | 'READ_ONLY' | 'NOT_FOUND' | 'CONFLICT' | 'SCAN_IN_PROGRESS' | 'DISPOSABLE_EMAIL' | 'BLOCKED_DOMAIN' | 'DOMAIN_CLAIMED' | 'INVALID_INPUT' | 'RATE_LIMITED' | 'EXTERNAL_SERVICE' | 'INTERNAL';
+export type AppErrorCode = 'UNAUTHENTICATED' | 'EMAIL_UNVERIFIED' | 'SUSPENDED' | 'FORBIDDEN' | 'READ_ONLY' | 'NOT_FOUND' | 'CONFLICT' | 'SCAN_IN_PROGRESS' | 'DISPOSABLE_EMAIL' | 'BLOCKED_DOMAIN' | 'DOMAIN_CLAIMED' | 'INVALID_INPUT' | 'RATE_LIMITED' | 'EXTERNAL_SERVICE' | 'BILLING_DISABLED' | 'BILLING_ACTIVATING' | 'INTERNAL';
 
 export class AppError extends Error {
+  requestId?: string;
   constructor(public readonly code: AppErrorCode, public readonly status: number, message: string, public readonly details?: Record<string, string[]>) {
     super(message);
     this.name = 'AppError';
@@ -47,7 +48,7 @@ function publicDetails(details: Record<string, string[]> | undefined, locale: Lo
 
 export function toActionError(error: unknown, locale: Locale = 'en', event = 'server_action_failed') {
   const mapped = toAppError(error);
-  const requestId = mapped.status >= 500 ? logUnexpectedError(event, error) : undefined;
+  const requestId = mapped.status >= 500 ? mapped.requestId ?? logUnexpectedError(event, error) : undefined;
   return {ok: false as const, error: {code: mapped.code, message: publicMessage(mapped.code, locale), ...(requestId ? {requestId} : {}), ...(mapped.details ? {details: publicDetails(mapped.details, locale)} : {}), ...(mapped instanceof RateLimitError ? {retryAfter: mapped.retryAfter} : {})}};
 }
 

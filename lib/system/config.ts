@@ -4,7 +4,7 @@ import {unstable_cache} from 'next/cache';
 import {createAdminClient} from '@/lib/supabase/admin';
 import {ForbiddenError} from '@/lib/errors';
 
-export type SystemFeature = 'public_passive_check' | 'manual_scans' | 'automatic_scans' | 'api_access' | 'team_invites';
+export type SystemFeature = 'public_passive_check' | 'manual_scans' | 'automatic_scans' | 'api_access' | 'team_invites' | 'billing_checkout_enabled';
 
 export const isSystemFeatureEnabled = unstable_cache(async (key: SystemFeature): Promise<boolean> => {
   const {data,error} = await createAdminClient().from('feature_flags').select('enabled').eq('key', key).maybeSingle();

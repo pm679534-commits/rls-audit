@@ -5,10 +5,19 @@ import {createServerAction} from '@/lib/actions';
 import {resolveEntitlements} from './entitlements';
 import {billingProvider} from './paddle';
 import {syncSubscription} from './sync';
-import {ConflictError, ForbiddenError} from '@/lib/errors';
+import {AppError, ConflictError, ForbiddenError} from '@/lib/errors';
+import {isSystemFeatureEnabled} from '@/lib/system/config';
+import {logUnexpectedError} from '@/lib/logger';
 import type {UserContext} from '@/lib/auth';
 
 const choice = z.object({plan: z.enum(['starter', 'pro', 'agency']), period: z.enum(['monthly', 'annual'])});
+function isPaddleAccountCheckoutError(error: unknown): boolean {
+  const value = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const raw = [value.message, value.code, value.detail, value.type, value.errors]
+    .map((part) => typeof part === 'string' ? part : part ? JSON.stringify(part) : '')
+    .join(' ').toLowerCase().replace(/[_-]+/g, ' ');
+  return /checkout(?:s)?[^.]{0,80}(?:not enabled|disabled|unavailable|not available)|(?:not enabled|disabled|unavailable|not available)[^.]{0,80}checkout|account[^.]{0,80}(?:not enabled|not activated|inactive|verification|onboarding)|seller[^.]{0,80}(?:not enabled|not activated|verification|approval)|business[^.]{0,80}(?:verification|approval|onboarding)|(?:not enabled|not activated|not approved)[^.]{0,60}(?:account|seller|business)/i.test(raw);
+}
 async function ownedSubscription(context: UserContext) {
   const {subscription} = await resolveEntitlements(context);
   if (!subscription?.paddle_subscription_id || !subscription.paddle_customer_id) throw new ForbiddenError();
@@ -17,10 +26,20 @@ async function ownedSubscription(context: UserContext) {
 
 export const startCheckout = createServerAction(choice, async (input, possibleContext) => {
   const context = possibleContext!;
+  if (!(await isSystemFeatureEnabled('billing_checkout_enabled'))) throw new AppError('BILLING_DISABLED', 403, 'Checkout is disabled.');
   const {subscription} = await resolveEntitlements(context);
   if (subscription && ['active', 'past_due', 'paused', 'trialing'].includes(subscription.status)) throw new ConflictError();
-  return {url: await billingProvider.createCheckout({ownerId: context.user.id, email: context.profile.email,
-    plan: input.plan, period: input.period})};
+  try {
+    return {url: await billingProvider.createCheckout({ownerId: context.user.id, email: context.profile.email,
+      plan: input.plan, period: input.period})};
+  } catch (error) {
+    if (isPaddleAccountCheckoutError(error)) {
+      const safeError = new AppError('BILLING_ACTIVATING', 503, 'Paddle checkout is not available for this account.');
+      safeError.requestId = logUnexpectedError('billing_checkout_account_unavailable', error, {ownerId: context.user.id});
+      throw safeError;
+    }
+    throw error;
+  }
 }, {rateLimit: {name: 'billing_checkout', limit: 5, windowSeconds: 3600}});
 
 export const changeBillingPlan = createServerAction(choice, async (input, possibleContext) => {

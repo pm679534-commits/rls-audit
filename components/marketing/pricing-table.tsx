@@ -7,7 +7,7 @@ import {Link} from '@/i18n/navigation';
 import {Button} from '@/components/ui/button';
 import {PLANS, PLAN_FEATURES, PLAN_IDS, type BillingPeriod, type PlanFeature} from '@/lib/plans';
 
-export function PricingTable({compact = false}: {compact?: boolean}) {
+export function PricingTable({compact = false, checkoutEnabled = false}: {compact?: boolean; checkoutEnabled?: boolean}) {
   const t = useTranslations('Marketing.pricing');
   const features = useTranslations('Marketing.planFeatures');
   const locale = useLocale();
@@ -23,7 +23,7 @@ export function PricingTable({compact = false}: {compact?: boolean}) {
       <h3 className="font-display text-3xl">{plan.name}</h3><p className="mt-2 min-h-12 text-sm text-muted-foreground">{t(`plans.${id}`)}</p>
       <p className="mt-7 text-4xl font-semibold tracking-tight tabular-nums">{format(period === 'annual' ? plan.priceEur.annual / 12 : plan.priceEur.monthly)}<span className="ml-1 text-base font-normal text-muted-foreground">{t('perMonth')}</span></p>
       <p className="mt-2 min-h-6 text-sm text-muted-foreground">{period === 'annual' ? t('billedAnnually', {total: format(plan.priceEur.annual)}) : t('billedMonthly')}</p>
-      <Button asChild className="mt-7 w-full" variant={id === 'pro' ? 'default' : 'outline'}><Link href="/sign-up">{t('startTrial')}</Link></Button>
+      {checkoutEnabled ? <Button asChild className="mt-7 w-full" variant={id === 'pro' ? 'default' : 'outline'}><Link href="/sign-up">{t('startTrial')}</Link></Button> : <Button asChild className="mt-7 w-full" variant={id === 'pro' ? 'default' : 'outline'}><Link href="/contact">{t('contactUs')}</Link></Button>}
       <ul className="mt-7 flex-1 space-y-3 border-t pt-6 text-sm">
         <li className="flex gap-3"><Check aria-hidden="true" className="size-4 shrink-0 text-success" />{t('sites', {count: plan.limits.sites})}</li>
         <li className="flex gap-3"><Check aria-hidden="true" className="size-4 shrink-0 text-success" />{t('scanInterval', {hours: plan.scanIntervalHours})}</li>

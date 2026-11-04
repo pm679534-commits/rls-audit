@@ -10,8 +10,8 @@ export default async function AdminSystemPage({searchParams}: {searchParams: Pro
   const t = await getTranslations('Phase8');
   const locale = await getLocale();
   const maintenance = settings.find((setting) => setting.key === 'maintenance_mode')?.value === true;
-  const featureLabels: Record<string,string> = Object.fromEntries((['public_passive_check','manual_scans','automatic_scans','api_access','team_invites'] as const).map((key) => [key,t(`system.featureLabels.${key}`)]));
-  const featureDescriptions: Record<string,string> = Object.fromEntries((['public_passive_check','manual_scans','automatic_scans','api_access','team_invites'] as const).map((key) => [key,t(`system.featureDescriptions.${key}`)]));
+  const featureLabels: Record<string,string> = Object.fromEntries((['public_passive_check','manual_scans','automatic_scans','api_access','team_invites','billing_checkout_enabled'] as const).map((key) => [key,t(`system.featureLabels.${key}`)]));
+  const featureDescriptions: Record<string,string> = Object.fromEntries((['public_passive_check','manual_scans','automatic_scans','api_access','team_invites','billing_checkout_enabled'] as const).map((key) => [key,t(`system.featureDescriptions.${key}`)]));
   const settingLabels: Record<string,string> = Object.fromEntries((['global_scan_concurrency','per_user_scan_concurrency','verification_recheck_days','public_check_rate_per_hour'] as const).map((key) => [key,t(`system.settingLabels.${key}`)]));
   const settingDescriptions: Record<string,string> = Object.fromEntries((['global_scan_concurrency','per_user_scan_concurrency','verification_recheck_days','public_check_rate_per_hour'] as const).map((key) => [key,t(`system.settingDescriptions.${key}`)]));
   return <div className="space-y-6"><AdminHeading eyebrow={t('panel')} title={t('system.title')} description={t('system.description')} />

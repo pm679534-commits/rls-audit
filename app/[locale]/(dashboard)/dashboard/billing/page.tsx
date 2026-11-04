@@ -4,9 +4,11 @@ import {createClient} from '@/lib/supabase/server';
 import {resolveEntitlements} from '@/lib/billing/entitlements';
 import {billingProvider} from '@/lib/billing/paddle';
 import {BillingPage} from '@/components/billing/billing-page';
+import {isSystemFeatureEnabled} from '@/lib/system/config';
 
 export default async function Page() {
   const context = await requireUser();
+  const checkoutEnabled = await isSystemFeatureEnabled('billing_checkout_enabled');
   const entitlements = await resolveEntitlements(context);
   const db = await createClient();
   const [{data: sites, error: sitesError}, {data: scans, error: scansError}, {data: team, error: teamError}] = await Promise.all([
@@ -25,6 +27,6 @@ export default async function Page() {
   }
   const t = await getTranslations('Phase6');
   return <div className="space-y-6"><div><h1 className="font-display text-3xl">{t('title')}</h1><p className="mt-2 text-muted-foreground">{t('description')}</p></div>
-    <BillingPage entitlements={entitlements} usage={{sites: sites ?? 0, scans: scans ?? 0, seats: seats ?? 0}} invoices={invoices} invoiceError={invoiceError} />
+    <BillingPage entitlements={entitlements} usage={{sites: sites ?? 0, scans: scans ?? 0, seats: seats ?? 0}} invoices={invoices} invoiceError={invoiceError} checkoutEnabled={checkoutEnabled} />
   </div>;
 }

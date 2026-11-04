@@ -3,6 +3,7 @@
 import {useState, useTransition} from 'react';
 import {useTranslations} from 'next-intl';
 import {useRouter} from '@/i18n/navigation';
+import {Link} from '@/i18n/navigation';
 import {PLANS, type PlanId, type BillingPeriod} from '@/lib/plans';
 import type {ResolvedEntitlements} from '@/lib/billing/entitlements';
 import type {BillingInvoice} from '@/lib/billing/provider';
@@ -16,7 +17,7 @@ function UsageMeter({label, used, limit}: {label: string; used: number; limit: n
     {limit !== null && <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={limit} aria-valuenow={Math.min(used, limit)} className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{width: `${percent}%`}} /></div>}</div>;
 }
 
-export function BillingPage({entitlements, usage, invoices, invoiceError}: {entitlements: ResolvedEntitlements; usage: Usage; invoices: BillingInvoice[]; invoiceError: boolean}) {
+export function BillingPage({entitlements, usage, invoices, invoiceError, checkoutEnabled}: {entitlements: ResolvedEntitlements; usage: Usage; invoices: BillingInvoice[]; invoiceError: boolean; checkoutEnabled: boolean}) {
   const t = useTranslations('Phase6');
   const overrideText = useTranslations('AdminPlanNotice');
   const router = useRouter();
@@ -33,6 +34,10 @@ export function BillingPage({entitlements, usage, invoices, invoiceError}: {enti
       try {
         const result = await action();
         if (!result.ok) {
+          if (checkout && ['BILLING_DISABLED', 'BILLING_ACTIVATING'].includes(result.error?.code ?? '')) {
+            setError(t('billingActivating'));
+            return;
+          }
           setError(checkout && (!result.error || ['INTERNAL', 'EXTERNAL_SERVICE'].includes(result.error.code ?? ''))
             ? t('checkoutFailed') : result.error?.message ?? t('actionFailed'));
           return;
@@ -63,11 +68,11 @@ export function BillingPage({entitlements, usage, invoices, invoiceError}: {enti
     <section className="rounded-xl border bg-card p-5"><h2 className="font-semibold">{t('usage')}</h2><div className="mt-5 grid gap-5 md:grid-cols-3"><UsageMeter label={t('sites')} used={usage.sites} limit={entitlements.site_limit ?? 0} /><UsageMeter label={t('manualScans')} used={usage.scans} limit={entitlements.manual_scans_per_month} /><UsageMeter label={t('teamSeats')} used={usage.seats} limit={entitlements.team_member_limit ?? 0} /></div></section>
     <section><div className="flex flex-wrap items-center justify-between gap-4"><h2 className="font-display text-2xl">{t('choosePlan')}</h2><div className="flex rounded-lg border p-1"><button aria-pressed={period === 'monthly'} onClick={() => setPeriod('monthly')} className={`rounded-md px-4 py-2 text-sm ${period === 'monthly' ? 'bg-primary text-primary-foreground' : ''}`}>{t('period.monthly')}</button><button aria-pressed={period === 'annual'} onClick={() => setPeriod('annual')} className={`rounded-md px-4 py-2 text-sm ${period === 'annual' ? 'bg-primary text-primary-foreground' : ''}`}>{t('period.annual')}</button></div></div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">{(['starter', 'pro', 'agency'] as PlanId[]).map((id) => <article key={id} className={`rounded-xl border bg-card p-5 ${current === id ? 'border-primary' : ''}`}><h3 className="text-xl font-semibold">{PLANS[id].name}</h3><p className="mt-3 text-3xl font-bold">€{PLANS[id].priceEur[period]} <span className="text-sm font-normal text-muted-foreground">/ {t(`period.${period}`)}</span></p><p className="mt-3 text-sm text-muted-foreground">{t('planDetails', {sites: PLANS[id].limits.sites, seats: PLANS[id].limits.teamMembers})}</p>
-        <button disabled={pending || (!!activePaid && subscription?.plan_id === id && subscription.billing_period === period) || (!!activePaid && subscription?.status !== 'active' && subscription?.status !== 'trialing') || !!subscription?.cancel_at_period_end}
+        {checkoutEnabled || activePaid ? <button disabled={pending || (!!activePaid && subscription?.plan_id === id && subscription.billing_period === period) || (!!activePaid && subscription?.status !== 'active' && subscription?.status !== 'trialing') || !!subscription?.cancel_at_period_end}
           onClick={() => run(id, () => activePaid ? changeBillingPlan({plan: id, period}) : startCheckout({plan: id, period}), !activePaid)}
-          className="mt-5 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{busy === id ? t('working') : activePaid && subscription?.plan_id === id && subscription.billing_period === period ? t('current') : activePaid ? t('changePlan') : t('selectPlan')}</button></article>)}</div>
+          className="mt-5 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{busy === id ? t('working') : activePaid && subscription?.plan_id === id && subscription.billing_period === period ? t('current') : activePaid ? t('changePlan') : t('selectPlan')}</button> : <Link href="/contact" className="mt-5 block w-full rounded-md border px-4 py-2 text-center text-sm font-medium hover:bg-muted">{t('requestAccess')}</Link>}</article>)}</div>
     </section>
-    {error && <p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive">{error}</p>}
+    {error && <p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive">{error} {error === t('billingActivating') && <Link href="/contact" className="font-semibold underline">{t('contactUs')}</Link>}</p>}
     <section className="rounded-xl border bg-card p-5"><h2 className="font-semibold">{t('invoices')}</h2>{invoiceError ? <p role="status" className="mt-3 text-sm text-muted-foreground">{t('invoiceUnavailable')}</p> : invoices.length ? <ul className="mt-4 divide-y">{invoices.map((invoice) => <li key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span>{invoice.number} · {new Date(invoice.date).toLocaleDateString(locale)} · {invoice.currency} {invoice.total ? (Number(invoice.total) / 100).toFixed(2) : ''}</span>{invoice.invoiceUrl && <a href={invoice.invoiceUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline">{t('viewInvoice')}</a>}</li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">{t('noInvoices')}</p>}</section>
   </div>;
 }
