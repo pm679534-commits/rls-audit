@@ -895,7 +895,7 @@
     },
     "period": {
       "monthly": "Aylıq",
-      "annual": "İllik"
+      "annual": "İllik · 2 ay pulsuz"
     },
     "country": "Ödəniş ölkəsi",
     "periodEnd": "Cari dövr {date} tarixində bitir",

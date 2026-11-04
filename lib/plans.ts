@@ -50,7 +50,7 @@ export const PLANS = {
     scanIntervalHours: 24, features: proFeatures
   },
   agency: {
-    id: 'agency', name: 'Agency', priceEur: {monthly: 99, annual: 990},
+    id: 'agency', name: 'Agency', priceEur: {monthly: 69, annual: 690},
     limits: {sites: 25, manualScansPerMonth: null, historyDays: 365, teamMembers: 5},
     scanIntervalHours: 24,
     features: {

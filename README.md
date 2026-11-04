@@ -38,7 +38,7 @@ Confirm exactly one row was returned. Admin access is checked in server code and
 
 ## Paddle Billing
 
-Create three products/plans with monthly and annual EUR prices matching `lib/plans.ts`: Starter €12/€120, Pro €39/€390, Agency €99/€990. Set the six `PADDLE_PRICE_*` variables to the corresponding **price IDs**. Set `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENVIRONMENT`, `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`, and `NEXT_PUBLIC_PADDLE_ENVIRONMENT` for the same sandbox or production environment.
+Create three products/plans with monthly and annual EUR prices matching `lib/plans.ts`: Starter €12/€120, Pro €39/€390, Agency €69/€690 (two months free on annual billing). Set the six `PADDLE_PRICE_*` variables to the corresponding **price IDs**. Set `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENVIRONMENT`, `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`, and `NEXT_PUBLIC_PADDLE_ENVIRONMENT` for the same sandbox or production environment.
 
 Register `https://YOUR_DOMAIN/api/webhooks/paddle` as the webhook endpoint. Subscribe to subscription created, updated, canceled, past due, paused, resumed, and transaction completed/payment failed/past due events. The handler verifies Paddle's signature against the raw body, deduplicates by event ID in `billing_events`, fetches current subscription state from Paddle, and updates entitlements. Configure Paddle's checkout/domain settings, tax and merchant details, and customer portal in the Paddle dashboard. Invoices in SiteGuard link to Paddle's invoice PDF after checking ownership.
 
